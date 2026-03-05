@@ -1,0 +1,16 @@
+{
+  "testType": "500-Chapter Production Test",
+  "timestamp": "2026-03-04T22:19:59.863Z",
+  "results": {
+    "chaptersGenerated": 500,
+    "totalParagraphs": 5921,
+    "averageWordsPerChapter": 748,
+    "duplicateParagraphs": 1,
+    "totalPhrases": 321171,
+    "uniquePhrases": 19104,
+    "similarityRate": 94.05,
+    "totalTimeSeconds": 8,
+    "averageTimePerChapter": 0.016
+  },
+  "verdict": "FAILED"
+}
