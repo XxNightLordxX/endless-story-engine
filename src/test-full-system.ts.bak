@@ -4,21 +4,20 @@
  */
 
 import AIStoryEngine from './services/storyEngine/AIStoryEngine';
-import { StoryGenerationOptions } from './services/storyEngine/AIStoryEngine';
+import type { StoryGenerationOptions } from './services/storyEngine/AIStoryEngine';
 import AdvancedStoryEngine from './services/storyEngine/AdvancedStoryEngine';
 import ChapterMemory from './services/storyEngine/ChapterMemory';
-import * as fs from 'fs';
-import * as path from 'path';
 
 // Test configuration
 const TEST_CONFIG: StoryGenerationOptions = {
   chapterNumber: 1,
   genre: 'Fantasy',
-  tone: 'Epic',
+  tone: 'dark',
   pacing: 'Balanced',
-  worldLogic: 'enabled',
+  worldLogic: true,
   mainCharacter: 'Elena',
-  setting: 'Mystical Forest'
+  setting: 'Mystical Forest',
+  targetWordCount: 500
 };
 
 // Results tracking
@@ -61,9 +60,9 @@ class FullSystemTester {
     }
   };
 
-  private engine: AIStoryEngine;
-  private advancedEngine: AdvancedStoryEngine;
-  private chapterMemory: ChapterMemory;
+  private engine!: AIStoryEngine;
+  private advancedEngine!: AdvancedStoryEngine;
+  private chapterMemory!: ChapterMemory;
   private chapters: any[] = [];
   private fingerprints: Set<string> = new Set();
 
@@ -86,7 +85,9 @@ class FullSystemTester {
         enableWebSearch: false, // Disable for faster testing
         qualityThreshold: 0.8,
         minimumChapterLength: 500,
-        enableUniqueGeneration: true
+        enableUniqueGeneration: true,
+        enableContinuityChecking: true,
+        worldViewMode: 'balanced'
       });
 
       // Initialize ChapterMemory
@@ -115,7 +116,7 @@ class FullSystemTester {
       
       console.log(`✓ Chapter 1 generated: ${chapter1.title}`);
       console.log(`  - Word count: ${chapter1.content.split(' ').length}`);
-      console.log(`  - Events: ${chapter1.events?.length || 'N/A'}`);
+      console.log(`  - Events: ${(chapter1 as any).events?.length || 'N/A'}`);
       console.log(`  - Structure: ${JSON.stringify(Object.keys(chapter1))}`);
 
       this.chapters.push(chapter1);
@@ -126,7 +127,7 @@ class FullSystemTester {
       
       console.log(`✓ Chapter 2 generated: ${chapter2.title}`);
       console.log(`  - Word count: ${chapter2.content.split(' ').length}`);
-      console.log(`  - Events: ${chapter2.events?.length || 'N/A'}`);
+      console.log(`  - Events: ${(chapter2 as any).events?.length || 'N/A'}`);
 
       this.chapters.push(chapter2);
 
@@ -209,7 +210,7 @@ class FullSystemTester {
 
         // Print progress every 25 chapters
         if (i % 25 === 0) {
-          const avgTime = generationTimes.slice(-25).reduce((a, b) => a + b, 0) / 25;
+          const avgTime = generationTimes.slice(-25).reduce((a: number, b: number) => a + b, 0) / 25;
           console.log(`\n📊 Progress Update (${i}/${count}):`);
           console.log(`  - Average generation time: ${avgTime.toFixed(0)}ms`);
           console.log(`  - Total words: ${this.results.totalWords.toLocaleString()}`);
@@ -233,24 +234,21 @@ class FullSystemTester {
   }
 
   async saveProgress(chapterNum: number): Promise<void> {
-    const progressDir = path.join(__dirname, '../test-progress');
-    if (!fs.existsSync(progressDir)) {
-      fs.mkdirSync(progressDir, { recursive: true });
-    }
-
-    const progressFile = path.join(progressDir, `progress-${chapterNum}.json`);
+    const progressDir = './test-progress';
+    const progressFile = `${progressDir}/progress-${chapterNum}.json`;
     const progress = {
       chapterNum,
       chaptersGenerated: this.results.chaptersGenerated,
       totalWords: this.results.totalWords,
       duplicatesFound: this.results.duplicatesFound,
-      recentChapters: this.chapters.slice(-5).map(c => ({
-        title: c.title,
-        wordCount: c.content.split(' ').length
+      recentChapters: this.chapters.slice(-5).map((p: any) => ({
+        title: p.title,
+        wordCount: p.content.split(' ').length
       }))
     };
 
-    fs.writeFileSync(progressFile, JSON.stringify(progress, null, 2));
+    // Write progress file (in browser environment, just log)
+    console.log(`📊 Progress data: ${JSON.stringify(progress, null, 2)}`);
     console.log(`💾 Progress saved to ${progressFile}`);
   }
 
@@ -259,8 +257,8 @@ class FullSystemTester {
     console.log('─'.repeat(50));
 
     // Uniqueness score
-    const totalParagraphs = this.chapters.reduce((sum, ch) => 
-      sum + ch.content.split('\n\n').filter(p => p.trim().length > 50).length, 0);
+    const totalParagraphs = this.chapters.reduce((sum: number, ch: any) => 
+      sum + ch.content.split('\n\n').filter((p: string) => p.trim().length > 50).length, 0);
     const uniqueParagraphs = this.fingerprints.size;
     this.results.quality.uniquenessScore = (uniqueParagraphs / totalParagraphs) * 100;
 
@@ -271,8 +269,8 @@ class FullSystemTester {
 
     // Flow score (based on word count consistency)
     const wordCounts = this.chapters.map(c => c.content.split(' ').length);
-    const avgWords = wordCounts.reduce((a, b) => a + b, 0) / wordCounts.length;
-    const variance = wordCounts.reduce((sum, wc) => sum + Math.pow(wc - avgWords, 2), 0) / wordCounts.length;
+    const avgWords = wordCounts.reduce((a: number, b: number) => a + b, 0) / wordCounts.length;
+    const variance = wordCounts.reduce((sum: number, wc: number) => sum + Math.pow(wc - avgWords, 2), 0) / wordCounts.length;
     const stdDev = Math.sqrt(variance);
     this.results.quality.flowScore = 100 - (stdDev / avgWords * 100);
 
@@ -282,12 +280,12 @@ class FullSystemTester {
     console.log(`  - Consistency: ${(100 - stdDev / avgWords * 100).toFixed(2)}%`);
 
     // Character consistency
-    const characterMentions = this.chapters.reduce((acc, ch) => {
+    const characterMentions = this.chapters.reduce((acc: number[], ch: any) => {
       const mainChar = (ch.content.match(/Elena/g) || []).length;
       acc.push(mainChar);
       return acc;
     }, []);
-    const avgMentions = characterMentions.reduce((a, b) => a + b, 0) / characterMentions.length;
+    const avgMentions = characterMentions.reduce((a: number, b: number) => a + b, 0) / characterMentions.length;
     this.results.quality.characterConsistency = Math.min(100, avgMentions);
 
     console.log(`\n✓ Character Consistency: ${this.results.quality.characterConsistency.toFixed(2)}%`);

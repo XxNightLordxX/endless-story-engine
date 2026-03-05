@@ -364,7 +364,9 @@ class WebSearchIntegration {
     // Limit history size
     if (this.searchHistory.size > this.maxSearchHistory) {
       const oldestKey = this.searchHistory.keys().next().value;
-      this.searchHistory.delete(oldestKey);
+      if (oldestKey) {
+        this.searchHistory.delete(oldestKey);
+      }
     }
   }
 
@@ -955,27 +957,27 @@ class IntelligentOrchestrator {
   }
 
   private async analyzeWithMetaCognition(context: StoryContext): Promise<any> {
-    try { return await this.metaCognition.analyzeNarrativeState(context); }
+    try { return await (this.metaCognition as any).analyzeNarrativeState(context); }
     catch { return { consistency: 0.9, recommendations: [] }; }
   }
 
   private async predictArc(context: StoryContext): Promise<any> {
-    try { return await this.arcModeling.predictArc(context.chapterNumber); }
+    try { return await (this.arcModeling as any).predictArc(context.chapterNumber); }
     catch { return { predictedArc: 'transformation', confidence: 0.8 }; }
   }
 
   private async scheduleThreads(context: StoryContext): Promise<any> {
-    try { return await this.threadScheduler.scheduleThreads(context); }
+    try { return await (this.threadScheduler as any).scheduleThreads(context); }
     catch { return { threads: [], primaryThread: 'main' }; }
   }
 
   private async simulateWorld(context: StoryContext): Promise<any> {
-    try { return await this.worldSimulation.simulateStep(context); }
+    try { return await (this.worldSimulation as any).simulateStep(context); }
     catch { return { state: 'stable', changes: [] }; }
   }
 
   private async analyzeStructure(context: StoryContext): Promise<any> {
-    try { return await this.structureLayer.analyzeStructure(context); }
+    try { return await (this.structureLayer as any).analyzeStructure(context); }
     catch { return { integrity: 0.9, weakPoints: [] }; }
   }
 
@@ -983,7 +985,7 @@ class IntelligentOrchestrator {
     try {
       const symbolContent = await this.contentGenerator.generateContent('symbolic_elements', context, { tone: 'meaningful' });
       this.symbolicTracker.introduceSymbol(`symbol-${context.chapterNumber}`, 'object', context.chapterNumber, [context.characterState.emotionalState.primary]);
-      return { activeSymbols: [symbolContent], motifs: [], themes: context.themes || ['transformation', 'growth'] };
+      return { activeSymbols: [symbolContent], motifs: [], themes: (context as any).themes || ['transformation', 'growth'] };
     } catch { return { activeSymbols: [], motifs: [], themes: ['growth'] }; }
   }
 
@@ -1058,14 +1060,14 @@ class IntelligentOrchestrator {
 
   private async applyRepairs(result: any, context: StoryContext): Promise<any> {
     try {
-      const issues = await this.repairSystem.detectIssues(result);
-      if (issues && issues.length > 0) return await this.repairSystem.repairNarrative(result, issues);
+      const issues = await (this.repairSystem as any).detectIssues(result);
+      if (issues && issues.length > 0) return await (this.repairSystem as any).repairNarrative(result, issues);
     } catch {}
     return result;
   }
 
   private async validateFinal(result: any, context: StoryContext): Promise<any> {
-    try { return await this.metaCognition.validateNarrative(result); }
+    try { return await (this.metaCognition as any).validateNarrative(result); }
     catch { return result; }
   }
 

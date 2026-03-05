@@ -314,14 +314,14 @@ export interface Path {
 }
 
 export interface MultidimensionalNarrative {
-  dimensions: NarrativeDimension[];
+  dimensions: DimensionInfo[];
   currentDimension: string;
   dimensionTransitions: DimensionTransition[];
   sharedElements: SharedElement[];
   uniqueElements: Map<string, string[]>; // dimension -> element IDs
 }
 
-export interface NarrativeDimension {
+export interface DimensionInfo {
   id: string;
   name: string;
   description: string;
@@ -955,10 +955,10 @@ export class ExperimentalNarrativeModes {
     dimensionCount: number,
     chaptersPerDimension: number
   ): MultidimensionalNarrative {
-    const dimensions: NarrativeDimension[] = [];
+    const dimensions: DimensionInfo[] = [];
 
     for (let i = 0; i < dimensionCount; i++) {
-      const dimension: NarrativeDimension = {
+      const dimension: DimensionInfo = {
         id: `dim-${i}`,
         name: `Dimension ${i + 1}`,
         description: `Alternative reality ${i + 1}`,
@@ -985,7 +985,7 @@ export class ExperimentalNarrativeModes {
     };
   }
 
-  private generateDimensionTransitions(dimensions: NarrativeDimension[]): DimensionTransition[] {
+  private generateDimensionTransitions(dimensions: DimensionInfo[]): DimensionTransition[] {
     const transitions: DimensionTransition[] = [];
 
     for (let i = 0; i < dimensions.length - 1; i++) {
@@ -1001,7 +1001,7 @@ export class ExperimentalNarrativeModes {
     return transitions;
   }
 
-  private generateSharedElements(dimensions: NarrativeDimension[]): SharedElement[] {
+  private generateSharedElements(dimensions: DimensionInfo[]): SharedElement[] {
     const elements: SharedElement[] = [];
     const types = ['character', 'location', 'theme', 'symbol', 'event'];
 

@@ -501,12 +501,12 @@ export class MetaCognitionSystem {
     const currentEntities = current.match(/\b([A-Z][a-z]+)\b/g) || [];
     const previousEntities = previous.match(/\b([A-Z][a-z]+)\b/g) || [];
     
-    return currentEntities.filter(entity => !previousEntities.includes(entity));
+    return currentEntities.filter((entity: string) => !(previousEntities as string[]).includes(entity));
   }
 
   private isEntityIntroduced(entity: string, content: string): boolean {
     const introductionMarkers = ['introduced', 'appeared', 'emerged', 'arrived', 'came'];
-    return introductionMarkers.some(marker => 
+    return introductionMarkers.some((marker: string) => 
       content.toLowerCase().includes(marker) && content.toLowerCase().includes(entity.toLowerCase())
     );
   }

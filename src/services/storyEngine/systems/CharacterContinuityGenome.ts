@@ -9,8 +9,8 @@
  * - Provides character continuity validation
  */
 
-import { Chapter, Character, StoryState } from '../types';
-import { StoryGenerationOptions } from '../types';
+import type { Chapter, Character, StoryState } from '../types';
+import type { StoryGenerationOptions } from '../types';
 
 interface CharacterGenome {
   characterId: string;
@@ -636,7 +636,7 @@ export class CharacterContinuityGenome {
     for (const [trait, value] of Object.entries(expected)) {
       const actualValue = personality[trait as keyof PersonalityTraits];
       if (typeof actualValue === 'number') {
-        mismatch += Math.abs(actualValue - value);
+        mismatch += Math.abs(actualValue - (value as number));
         count++;
       }
     }

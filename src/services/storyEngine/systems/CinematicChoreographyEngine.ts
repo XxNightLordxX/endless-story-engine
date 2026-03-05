@@ -38,7 +38,9 @@ export type ShotType =
   | 'pov'          // Character perspective
   | 'over_shoulder' // Dialogue scenes
   | 'two_shot'     // Dual character
-  | 'master';      // Full coverage
+  | 'master'       // Full coverage
+  | 'low_angle'    // Added for compatibility
+  | 'high_angle';  // Added for compatibility
 
 export type CameraAngle = 
   | 'eye_level'    // Neutral
@@ -48,6 +50,8 @@ export type CameraAngle =
   | 'birds_eye'    // Omniscient view
   | 'worms_eye'    // Dramatic impact
   | 'canted'       // Disorientation
+  | 'natural'      // Added for compatibility
+  | 'warm'         // Added for compatibility
   | 'crane';       // Epic reveal
 
 export type CameraMovement = 
@@ -156,7 +160,9 @@ export type ColorPalette =
   | 'muted'
   | 'monochromatic'
   | 'complementary'
-  | 'analogous';
+  | 'analogous'
+  | 'natural'
+  | 'warm';
 
 export type ColorLook = 
   | 'natural'
@@ -285,7 +291,8 @@ export type ScaleType =
   | 'local'
   | 'regional'
   | 'global'
-  | 'cosmic';
+  | 'cosmic'
+  | 'epic';
 
 export type PacingType = 
   | 'glacial'
@@ -354,6 +361,7 @@ export interface SceneContext {
   revelationLevel: number;
   previousShot: ShotType;
   previousAngle: CameraAngle;
+  sceneHistory?: CinematicScene[];
 }
 
 // ============================================================================
@@ -536,7 +544,9 @@ export class CinematicChoreographyEngine {
       'birds_eye': ['worms_eye'],
       'worms_eye': ['birds_eye'],
       'canted': [],
-      'crane': []
+      'crane': [],
+      'natural': [],
+      'warm': []
     };
 
     const opposing = opposingAngles[newAngle] || [];

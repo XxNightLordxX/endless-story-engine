@@ -9,8 +9,8 @@
  * - Maintains world consistency and logic
  */
 
-import { Chapter, StoryState } from '../types';
-import { StoryGenerationOptions } from '../types';
+import type { Chapter, StoryState } from '../types';
+import type { StoryGenerationOptions } from '../types';
 
 interface WorldState {
   time: WorldTime;
@@ -470,7 +470,7 @@ export class DynamicWorldSimulation {
     } else if (worldInfo.time.includes('afternoon')) {
       this.worldState.time.timeOfDay = 'afternoon';
     } else if (worldInfo.time.includes('evening') || worldInfo.time.includes('dusk')) {
-      this.worldState.time.timeOfDay = 'evening';
+      this.worldState.time.timeOfDay = 'dusk';
     } else if (worldInfo.time.includes('night') || worldInfo.time.includes('dawn')) {
       this.worldState.time.timeOfDay = 'night';
     }

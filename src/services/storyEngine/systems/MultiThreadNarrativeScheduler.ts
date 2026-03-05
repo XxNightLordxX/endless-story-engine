@@ -199,7 +199,7 @@ export class MultiThreadNarrativeScheduler {
     const decision = this.makeSchedulingDecision(threadScores, chapterNumber);
 
     // Record history
-    this.threadHistory.set(chapterNumber, [decision.activeThread, ...decision.secondaryThreads]);
+    this.threadHistory.set(chapterNumber, [decision.activeThread, ...(decision.secondaryThreads || [])]);
 
     return decision;
   }
@@ -807,7 +807,7 @@ export class MultiThreadNarrativeScheduler {
     for (const thread of this.threads.values()) {
       if (thread.status === 'active') activeThreads++;
       else if (thread.status === 'pending') pendingThreads++;
-      else if (thread.status === 'resolved') completedThreads++;
+      else if (thread.status === 'completed') completedThreads++;
     }
 
     return {

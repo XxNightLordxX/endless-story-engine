@@ -202,6 +202,15 @@ export interface SynergyMetrics {
   fulfilledReferences: number;
 }
 
+export interface SynergyEngineState {
+  arcs: [string, ArcNode][];
+  connections: [string, NarrativeArcConnection][];
+  synergyPoints: [string, SynergyPoint][];
+  crossReferences: [string, CrossReference][];
+  rules: SynergyRule[];
+  network: ArcSynergyNetwork | null;
+}
+
 // ============================================================================
 // MAIN ENGINE CLASS
 // ============================================================================
@@ -730,7 +739,7 @@ export class CrossArcSynergyEngine {
       exists: true,
       connections,
       synergyPoints,
-      crossReferences,
+      crossReferences: crossRefs,
       metrics: {
         connectionCount: connections.length,
         averageConnectionStrength: connections.reduce((s, c) => s + c.strength, 0) / (connections.length || 1),

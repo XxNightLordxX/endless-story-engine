@@ -9,8 +9,8 @@
  * - Tracks character speech patterns across chapters
  */
 
-import { Chapter, Character } from '../types';
-import { StoryGenerationOptions } from '../types';
+import type { Chapter, Character } from '../types';
+import type { StoryGenerationOptions } from '../types';
 
 interface VoiceProfile {
   characterId: string;
@@ -126,9 +126,7 @@ export class DialogueIntelligenceSystem {
       idioms: ['time will tell', 'in due course', 'as it were'],
       catchphrases: [],
       preferredTopics: ['politics', 'history', 'art', 'culture'],
-      avoidedTopics: ['vulgarity', 'common concerns'],
-      confidenceScore: 0.5,
-      sampleDialogues: []
+      avoidedTopics: ['vulgarity', 'common concerns']
     });
 
     // Commoner/Worker character
@@ -163,9 +161,7 @@ export class DialogueIntelligenceSystem {
       idioms: ['hit the sack', 'piece of cake', 'break a leg'],
       catchphrases: [],
       preferredTopics: ['family', 'work', 'daily life'],
-      avoidedTopics: ['politics', 'abstract concepts'],
-      confidenceScore: 0.5,
-      sampleDialogues: []
+      avoidedTopics: ['politics', 'abstract concepts']
     });
 
     // Scholar/Intellectual character
@@ -200,9 +196,7 @@ export class DialogueIntelligenceSystem {
       idioms: ['to put it another way', 'in essence', 'at its core'],
       catchphrases: [],
       preferredTopics: ['science', 'philosophy', 'knowledge', 'research'],
-      avoidedTopics: ['gossip', 'trivial matters'],
-      confidenceScore: 0.5,
-      sampleDialogues: []
+      avoidedTopics: ['gossip', 'trivial matters']
     });
 
     // Warrior/Soldier character
@@ -237,9 +231,7 @@ export class DialogueIntelligenceSystem {
       idioms: ['hold your ground', 'steel yourself', 'face the music'],
       catchphrases: ['For honor!', 'No retreat!'],
       preferredTopics: ['combat', 'strategy', 'honor', 'duty'],
-      avoidedTopics: ['weakness', 'surrender'],
-      confidenceScore: 0.5,
-      sampleDialogues: []
+      avoidedTopics: ['weakness', 'surrender']
     });
   }
 
@@ -256,7 +248,7 @@ export class DialogueIntelligenceSystem {
       ...profile,
       confidenceScore: 0.5,
       sampleDialogues: []
-    };
+    } as VoiceProfile;
 
     this.voiceProfiles.set(characterId, fullProfile);
     return fullProfile;
@@ -295,7 +287,7 @@ export class DialogueIntelligenceSystem {
         character: this.identifySpeaker(match[1], content.substring(0, match.index)),
         text: match[1],
         chapter: this.currentChapter,
-        context: this.extractContext(content, match.index, 100),
+        context: this.extractContext(content, match.index, 100, match[1].length),
         analyzed: false,
         voiceMatch: 0
       });
@@ -328,9 +320,9 @@ export class DialogueIntelligenceSystem {
   /**
    * Extract context around dialogue
    */
-  private extractContext(content: string, index: number, length: number): string {
+  private extractContext(content: string, index: number, length: number, dialogueLength: number): string {
     const start = Math.max(0, index - length);
-    const end = Math.min(content.length, index + dialogue.length + length);
+    const end = Math.min(content.length, index + dialogueLength + length);
     return content.substring(start, end);
   }
 
@@ -706,7 +698,7 @@ export class DialogueIntelligenceSystem {
     let dialogue = `${pattern} ${structure}`;
 
     // Adjust tone
-    dialogue = this.adjustTone(dialogue, profile);
+    dialogue = this.adjustTone(dialogue, profile.tone);
 
     return dialogue.trim();
   }
