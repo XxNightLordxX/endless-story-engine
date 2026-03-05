@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Temporary and log files
+outputs/
+summarized_conversations/
