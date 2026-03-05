@@ -1,0 +1,35 @@
+{
+  "testName": "unified-medium-test",
+  "timestamp": "2026-03-05T07:18:51.746Z",
+  "results": {
+    "totalChapters": 20,
+    "totalParagraphs": 60,
+    "duplicateParagraphs": 0,
+    "duplicatePairs": [],
+    "avgParagraphLength": 219.95,
+    "avgChapterLength": 659.85,
+    "executionTime": 9
+  },
+  "sampleChapters": [
+    {
+      "title": "Chapter 1: growth in Eclipsis",
+      "content": "The tension coiled tighter, something significant approaching.\n\na flickering light in the distance appeared, hope persisting through uncertainty.\n\nEclipsis shifted, new data structures emerging from the infinite possibilities...."
+    },
+    {
+      "title": "Chapter 2: growth in Reality",
+      "content": "A sense of anticipation built steadily, each moment heavy with potential.\n\nThe physical world continued its patient rotation, indifferent to the drama unfolding within.\n\n Indeed, a flickering light in the distance appeared, hope persisting through uncertainty. the significance rippled outward...."
+    },
+    {
+      "title": "Chapter 3: growth in Eclipsis",
+      "content": "An almost tangible pressure filled the space between heartbeats.\n\na reflection in still water appeared, the duality of existence.\n\nThe virtual realm transformed, revealing layers previously hidden from perception...."
+    },
+    {
+      "title": "Chapter 4: growth in Reality",
+      "content": "a sound that echoed from beyond appeared, calls from the transcendent.\n\nThe narrative gravity increased, pulling all elements toward revelation.\n\nTime flowed forward in the material realm, each moment building upon the last...."
+    },
+    {
+      "title": "Chapter 5: growth in Eclipsis",
+      "content": " Indeed, a reflection in still water appeared, the duality of existence.\n\n Indeed, a sense of anticipation built steadily, each moment heavy with potential.\n\nThe digital landscape rippled, reality reconfiguring itself according to deeper patterns...."
+    }
+  ]
+}

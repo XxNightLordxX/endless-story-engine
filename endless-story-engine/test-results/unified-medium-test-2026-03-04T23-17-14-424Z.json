@@ -1,0 +1,35 @@
+{
+  "testName": "unified-medium-test",
+  "timestamp": "2026-03-04T23:17:14.424Z",
+  "results": {
+    "totalChapters": 20,
+    "totalParagraphs": 40,
+    "duplicateParagraphs": 0,
+    "duplicatePairs": [],
+    "avgParagraphLength": 158.825,
+    "avgChapterLength": 317.65,
+    "executionTime": 5
+  },
+  "sampleChapters": [
+    {
+      "title": "Record 1: awakening Begins",
+      "content": "The immortal appeared forgotten cathedrals. After a while, controlled the magic. Need arcane throughout. Therefore Chapter 1 would change everything.\n\nMoments later. Power comprehended throughout the experience. The hunter the aura changed forever. Therefore Chapter 2 would bring new challenges and revelations...."
+    },
+    {
+      "title": "The human concern",
+      "content": "Kael spoke the waiting area. Moments later, experienced the location. Concern concrete throughout. Meanwhile Chapter 2 would change everything.\n\nEverything changed. Gratitude recognized throughout the experience. The patient the concrete reality changed forever. Furthermore Chapter 3 would bring new challenges and revelations...."
+    },
+    {
+      "title": "need of Eclipsis",
+      "content": "The being emerged eternal darkness. Rapidly, detected the supernatural force. Desire powerful throughout. So Chapter 3 would change everything.\n\nAfter a while. Evolution detected throughout the experience. The progenitor the presence changed forever. Simultaneously Chapter 4 would bring new challenges and revelations...."
+    },
+    {
+      "title": "Tale 4: physical relief",
+      "content": "The human returned the recovery space. Moments later, experienced the situation. Worry tangible throughout. Simultaneously Chapter 4 would change everything.\n\nThe narrative advanced. Fear felt throughout the experience. The survivor the truth changed forever. However Chapter 5 would bring new challenges and revelations...."
+    },
+    {
+      "title": "Narrative 5: need Unfolds",
+      "content": "The immortal coalesced ancient domains. At that instant, noticed the presence. Instinct forbidden throughout. Consequently Chapter 5 would change everything.\n\nThe mood shifted. Bloodlust felt throughout the experience. The awakened one the magic changed forever. But Chapter 6 would bring new challenges and revelations...."
+    }
+  ]
+}

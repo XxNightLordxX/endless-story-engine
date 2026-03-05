@@ -1,0 +1,35 @@
+{
+  "testName": "unified-basic-test",
+  "timestamp": "2026-03-05T07:18:51.735Z",
+  "results": {
+    "totalChapters": 5,
+    "totalParagraphs": 15,
+    "duplicateParagraphs": 0,
+    "duplicatePairs": [],
+    "avgParagraphLength": 83.13333333333334,
+    "avgChapterLength": 249.4,
+    "executionTime": 4
+  },
+  "sampleChapters": [
+    {
+      "title": "Chapter 1: growth in Eclipsis",
+      "content": "An almost tangible pressure filled the space between heartbeats.\n\nDigital horizons expanded, the boundary between real and virtual dissolving further.\n\na path that appeared where none existed appeared, possibility emerging from will...."
+    },
+    {
+      "title": "Chapter 2: growth in Reality",
+      "content": "The narrative gravity increased, pulling all elements toward revelation.\n\na flickering light in the distance appeared, hope persisting through uncertainty.\n\nThe physical world continued its patient rotation, indifferent to the drama unfolding within...."
+    },
+    {
+      "title": "Chapter 3: growth in Eclipsis",
+      "content": "a sound that echoed from beyond appeared, calls from the transcendent.\n\nThe atmosphere thickened with unspoken meaning, pregnant with possibility.\n\n Indeed, digital horizons expanded, the boundary between real and virtual dissolving further...."
+    },
+    {
+      "title": "Chapter 4: growth in Reality",
+      "content": "a shadow that moved against the light appeared, the presence of hidden truth.\n\nReality reasserted itself with quiet certainty, the mundane carrying its own profound weight.\n\n Indeed, an almost tangible pressure filled the space between heartbeats. something shifted in understanding...."
+    },
+    {
+      "title": "Chapter 5: growth in Eclipsis",
+      "content": " Indeed, the narrative gravity increased, pulling all elements toward revelation.\n\nThe digital landscape rippled, reality reconfiguring itself according to deeper patterns.\n\n Indeed, a flickering light in the distance appeared, hope persisting through uncertainty...."
+    }
+  ]
+}

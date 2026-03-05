@@ -1,0 +1,35 @@
+{
+  "testName": "unified-basic-test",
+  "timestamp": "2026-03-04T23:17:14.419Z",
+  "results": {
+    "totalChapters": 5,
+    "totalParagraphs": 10,
+    "duplicateParagraphs": 0,
+    "duplicatePairs": [],
+    "avgParagraphLength": 157.5,
+    "avgChapterLength": 315,
+    "executionTime": 3
+  },
+  "sampleChapters": [
+    {
+      "title": "Saga 1: transformation Discovered",
+      "content": "Kael emerged mystical caverns. Quickly, recognized the force. Ascension arcane throughout. Simultaneously Chapter 1 would change everything.\n\nTime passed. Desire noticed throughout the experience. The hunter the blood magic changed forever. Furthermore Chapter 2 would bring new challenges and revelations...."
+    },
+    {
+      "title": "The medical concern",
+      "content": "The patient returned the waking world. In an instant, felt the reality. Gratitude clinical throughout. Furthermore Chapter 2 would change everything.\n\nThe mood shifted. Anxiety touched throughout the experience. The caregiver the truth changed forever. But Chapter 3 would bring new challenges and revelations...."
+    },
+    {
+      "title": "resolve of Eclipsis",
+      "content": "The immortal emerged mystical caverns. After a while, absorbed the shadow energy. Instinct mystical throughout. Therefore Chapter 3 would change everything.\n\nMoments later. Ambition channeled throughout the experience. The progenitor the essence changed forever. Meanwhile Chapter 4 would bring new challenges and revelations...."
+    },
+    {
+      "title": "Story 4: authentic love",
+      "content": "The visitor stirred the physical world. Everything changed, smelled the physical space. Strength real throughout. Likewise Chapter 4 would change everything.\n\nThe scene shifted. Devotion touched throughout the experience. The survivor the place changed forever. Similarly Chapter 5 would bring new challenges and revelations...."
+    },
+    {
+      "title": "Report 5: instinct Continues",
+      "content": "The nocturnal appeared the crimson void. Quickly, perceived the supernatural force. Ambition mysterious throughout. But Chapter 5 would change everything.\n\nMeanwhile. Power channeled throughout the experience. The hunter the crimson light changed forever. Moreover Chapter 6 would bring new challenges and revelations...."
+    }
+  ]
+}
