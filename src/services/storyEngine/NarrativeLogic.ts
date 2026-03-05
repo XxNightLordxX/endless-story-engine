@@ -4,7 +4,6 @@
  */
 
 import type { Chapter, Character } from '../../types';
-import type { NarrativeState } from './AIStoryEngine';
 
 export interface NarrativeArc {
   type: 'setup' | 'rising_action' | 'climax' | 'falling_action' | 'resolution';
