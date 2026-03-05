@@ -1,0 +1,35 @@
+{
+  "testName": "unified-500-production",
+  "timestamp": "2026-03-04T23:17:24.609Z",
+  "results": {
+    "totalChapters": 500,
+    "totalParagraphs": 1000,
+    "duplicateParagraphs": 0,
+    "duplicatePairs": [],
+    "avgParagraphLength": 159.222,
+    "avgChapterLength": 318.444,
+    "executionTime": 307
+  },
+  "sampleChapters": [
+    {
+      "title": "Narrative 1: bloodlust Transformed",
+      "content": "The being manifested the crimson void. In that moment, harnessed the crimson light. Desire supernatural throughout. And Chapter 1 would change everything.\n\nThe focus moved. Ambition commanded throughout the experience. The awakened one the spirit changed forever. Thus Chapter 2 would bring new challenges and revelations...."
+    },
+    {
+      "title": "The authentic determination",
+      "content": "The patient spoke sterile corridors. At that instant, understood the situation. Love genuine throughout. Consequently Chapter 2 would change everything.\n\nThe focus moved. Fear noticed throughout the experience. The person the reality changed forever. Consequently Chapter 3 would bring new challenges and revelations...."
+    },
+    {
+      "title": "awakening of Eclipsis",
+      "content": "The immortal coalesced digital landscapes. Quickly, perceived the crimson light. Hunger ancient throughout. Furthermore Chapter 3 would change everything.\n\nEverything changed. Awakening commanded throughout the experience. The entity the darkness changed forever. However Chapter 4 would bring new challenges and revelations...."
+    },
+    {
+      "title": "Saga 4: quiet worry",
+      "content": "The individual resurfaced sterile corridors. At that instant, understood the physical space. Worry mortal throughout. Moreover Chapter 4 would change everything.\n\nElsewhere. Worry smelled throughout the experience. The survivor the surroundings changed forever. Meanwhile Chapter 5 would bring new challenges and revelations...."
+    },
+    {
+      "title": "Story 5: determination Continues",
+      "content": "The progenitor materialized forgotten cathedrals. In an instant, comprehended the energy. Purpose supernatural throughout. Consequently Chapter 5 would change everything.\n\nBeyond. Resolve channeled throughout the experience. The immortal the shadow energy changed forever. Similarly Chapter 6 would bring new challenges and revelations...."
+    }
+  ]
+}
