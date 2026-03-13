@@ -18,7 +18,12 @@ export function createApp() {
   };
 
   app.post('/api/auth/login', (req, res) => {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
+
+    if (!email || !password) {
+      res.status(400).json({ error: 'Email and password are required' });
+      return;
+    }
 
     if (email === ADMIN_ACCOUNT.email && password === ADMIN_ACCOUNT.password) {
       const adminData = storage.getAdminState();
@@ -53,7 +58,12 @@ export function createApp() {
   });
 
   app.post('/api/auth/register', (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, email, password } = req.body || {};
+
+    if (!username || !email || !password) {
+      res.status(400).json({ error: 'Username, email, and password are required' });
+      return;
+    }
 
     if (email === ADMIN_ACCOUNT.email) {
       res.status(400).json({ error: 'This email is reserved.' });
@@ -118,7 +128,12 @@ export function createApp() {
   // ─── ADMIN: READ TRACKING + GENERATION TRIGGER ────────────────────────────
 
   app.post('/api/admin/mark-read', async (req, res) => {
-    const { chapterNumber, userId } = req.body;
+    const { chapterNumber, userId } = req.body || {};
+
+    if (!chapterNumber || !userId) {
+      res.status(400).json({ error: 'chapterNumber and userId are required' });
+      return;
+    }
 
     if (userId !== ADMIN_ACCOUNT.id) {
       storage.updateUserLastRead(userId, chapterNumber);
