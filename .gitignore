@@ -25,3 +25,6 @@ dist-ssr
 # Temporary and log files
 outputs/
 summarized_conversations/
+
+# Server data (generated at runtime)
+data/

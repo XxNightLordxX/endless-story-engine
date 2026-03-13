@@ -1,620 +1,322 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../hooks/useRedux';
-import { 
-  setPaused, setSpeed, setPacing, setTone, setTension, setWorldLogic,
-  toggleDiagnostics, toggleStatSystem, toggleSystemScreen, toggleRealityIntegration,
-  addCommand
-} from '../store/slices/adminSlice';
+import { setAdminData, setGenerating } from '../store/slices/adminSlice';
 import { addToast } from '../store/slices/uiSlice';
-import { 
-  Terminal, Play, Pause, BarChart3, Users, 
-  Activity, BookOpen
+import {
+  BookOpen, Settings, Key, Trash2, RefreshCw, Zap, Eye, AlertTriangle, CheckCircle
 } from 'lucide-react';
+import * as api from '../api';
 
-// Tab Component
-interface TabProps {
-  label: string;
-  icon: any;
-  active: boolean;
-  onClick: () => void;
-}
-
-const Tab = ({ label, icon: Icon, active, onClick }: TabProps) => (
-  <button
-    onClick={onClick}
-    className={`flex items-center space-x-2 px-6 py-3 font-medium transition-colors border-b-2 ${
-      active
-        ? 'text-primary-600 border-primary-600'
-        : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-white hover:border-gray-300 dark:hover:border-gray-600'
-    }`}
-  >
-    <Icon size={18} />
-    <span>{label}</span>
-  </button>
-);
-
-// Command Box Component
-const CommandBox = () => {
-  const dispatch = useAppDispatch();
-  const { commands } = useAppSelector((state) => state.admin);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const [inputValue, setInputValue] = useState('');
-
-  const commonCommands = [
-    { cmd: '/pause', desc: 'Pause story generation' },
-    { cmd: '/resume', desc: 'Resume story generation' },
-    { cmd: '/speed fast', desc: 'Set generation speed to fast' },
-    { cmd: '/pacing 7', desc: 'Increase pacing intensity' },
-    { cmd: '/tone dark', desc: 'Set tone to dark' },
-    { cmd: '/tension 8', desc: 'Increase tension' },
-  ];
-
-  const handleCommandSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputValue.trim()) return;
-
-    dispatch(addCommand(inputValue));
-    setCommandHistory(prev => [...prev, inputValue]);
-    setHistoryIndex(-1);
-
-    // Process command (simplified for demo)
-    processCommand(inputValue);
-    
-    setInputValue('');
-  };
-
-  const processCommand = (cmd: string) => {
-    const parts = cmd.split(' ');
-    const command = parts[0].toLowerCase();
-    const args = parts.slice(1);
-
-    switch (command) {
-      case '/pause':
-        dispatch(setPaused(true));
-        dispatch(addToast({ type: 'success', message: 'Story generation paused', duration: 3000 }));
-        break;
-      case '/resume':
-        dispatch(setPaused(false));
-        dispatch(addToast({ type: 'success', message: 'Story generation resumed', duration: 3000 }));
-        break;
-      case '/speed':
-        if (['slow', 'normal', 'fast'].includes(args[0])) {
-          dispatch(setSpeed(args[0] as 'slow' | 'normal' | 'fast'));
-          dispatch(addToast({ type: 'success', message: `Speed set to ${args[0]}`, duration: 3000 }));
-        }
-        break;
-      case '/pacing':
-        const pacing = parseInt(args[0]);
-        if (!isNaN(pacing) && pacing >= 1 && pacing <= 10) {
-          dispatch(setPacing(pacing));
-          dispatch(addToast({ type: 'success', message: `Pacing set to ${pacing}`, duration: 3000 }));
-        }
-        break;
-      case '/tone':
-        if (['dark', 'neutral', 'light'].includes(args[0])) {
-          dispatch(setTone(args[0] as 'dark' | 'neutral' | 'light'));
-          dispatch(addToast({ type: 'success', message: `Tone set to ${args[0]}`, duration: 3000 }));
-        }
-        break;
-      case '/tension':
-        const tension = parseInt(args[0]);
-        if (!isNaN(tension) && tension >= 1 && tension <= 10) {
-          dispatch(setTension(tension));
-          dispatch(addToast({ type: 'success', message: `Tension set to ${tension}`, duration: 3000 }));
-        }
-        break;
-      default:
-        dispatch(addToast({ type: 'error', message: 'Unknown command', duration: 3000 }));
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (historyIndex < commandHistory.length - 1) {
-        const newIndex = historyIndex + 1;
-        setHistoryIndex(newIndex);
-        setInputValue(commandHistory[commandHistory.length - 1 - newIndex]);
-      }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (historyIndex > 0) {
-        const newIndex = historyIndex - 1;
-        setHistoryIndex(newIndex);
-        setInputValue(commandHistory[commandHistory.length - 1 - newIndex]);
-      } else if (historyIndex === 0) {
-        setHistoryIndex(-1);
-        setInputValue('');
-      }
-    }
-  };
-
-  return (
-    <div className="bg-gray-900 rounded-xl p-4 text-green-400 font-mono">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <Terminal size={20} />
-          <span className="text-gray-300">Command Box</span>
-        </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-500">
-          <span>NLP Enabled</span>
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-        </div>
-      </div>
-
-      {/* Command Suggestions */}
-      <div className="mb-4 pb-4 border-b border-gray-700">
-        <p className="text-xs text-gray-500 mb-2">Common Commands:</p>
-        <div className="flex flex-wrap gap-2">
-          {commonCommands.map((cmd, idx) => (
-            <button
-              key={idx}
-              onClick={() => setInputValue(cmd.cmd)}
-              className="px-3 py-1 bg-gray-800 hover:bg-gray-700 rounded text-xs transition-colors"
-            >
-              {cmd.cmd}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Command History */}
-      <div className="h-48 overflow-y-auto mb-4 space-y-2">
-        {commands.map((cmd, idx) => (
-          <div key={idx} className="text-sm">
-            <span className="text-gray-500">{idx + 1}. </span>
-            <span className="text-white">{cmd}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Input */}
-      <form onSubmit={handleCommandSubmit}>
-        <div className="flex items-center space-x-2">
-          <span className="text-green-500">$</span>
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Enter command (try /help)..."
-            className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-600"
-          />
-        </div>
-      </form>
-
-      <div className="mt-2 text-xs text-gray-600">
-        Tip: Use arrow keys for command history. Try NLP: "slow down the pacing"
-      </div>
-    </div>
-  );
-};
-
-// Story Generation Panel
-const StoryGenerationPanel = () => {
-  const dispatch = useAppDispatch();
-  const { storyGeneration, storyControls } = useAppSelector((state) => state.admin);
-
-  return (
-    <div className="space-y-6">
-      {/* Generation Controls */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Story Generation Controls
-        </h3>
-        
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              {storyGeneration.paused ? (
-                <Play className="w-6 h-6 text-green-600" />
-              ) : (
-                <Pause className="w-6 h-6 text-yellow-600" />
-              )}
-              <span className="text-gray-700 dark:text-gray-300">
-                {storyGeneration.paused ? 'Generation Paused' : 'Generating...'}
-              </span>
-            </div>
-            <button
-              onClick={() => dispatch(setPaused(!storyGeneration.paused))}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                storyGeneration.paused
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-yellow-600 text-white hover:bg-yellow-700'
-              }`}
-            >
-              {storyGeneration.paused ? 'Resume' : 'Pause'}
-            </button>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Generation Speed: {storyGeneration.speed}
-            </label>
-            <div className="flex space-x-2">
-              {['slow', 'normal', 'fast'].map((speed) => (
-                <button
-                  key={speed}
-                  onClick={() => dispatch(setSpeed(speed as 'slow' | 'normal' | 'fast'))}
-                  className={`px-3 py-1 rounded text-sm transition-colors ${
-                    storyGeneration.speed === speed
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {speed}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Story Controls */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Story Parameters
-        </h3>
-
-        <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Pacing: {storyControls.pacing}
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={storyControls.pacing}
-              onChange={(e) => dispatch(setPacing(parseInt(e.target.value)))}
-              className="w-full"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Tone: {storyControls.tone}
-            </label>
-            <div className="flex space-x-2">
-              {['light', 'neutral', 'dark'].map((tone) => (
-                <button
-                  key={tone}
-                  onClick={() => dispatch(setTone(tone as 'light' | 'neutral' | 'dark'))}
-                  className={`px-3 py-1 rounded text-sm capitalize transition-colors ${
-                    storyControls.tone === tone
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {tone}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Tension: {storyControls.tension}
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={storyControls.tension}
-              onChange={(e) => dispatch(setTension(parseInt(e.target.value)))}
-              className="w-full"
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <span className="text-gray-700 dark:text-gray-300">World Logic</span>
-            <button
-              onClick={() => dispatch(setWorldLogic(!storyControls.worldLogic))}
-              className={`w-12 h-6 rounded-full transition-colors ${
-                storyControls.worldLogic ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
-              }`}
-            >
-              <div
-                className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                  storyControls.worldLogic ? 'translate-x-6' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Queue Status */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Generation Queue
-        </h3>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Queued Chapters</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {storyGeneration.queue.length}
-            </p>
-          </div>
-          <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Published Chapters</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {storyGeneration.published}
-            </p>
-          </div>
-          <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Quality Score</p>
-            <p className="text-2xl font-bold text-green-600">
-              {storyGeneration.qualityScore}%
-            </p>
-          </div>
-          <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
-            <p className={`text-lg font-bold ${
-              storyGeneration.paused ? 'text-yellow-600' : 'text-green-600'
-            }`}>
-              {storyGeneration.paused ? 'Paused' : 'Active'}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Dashboard Panel
-const DashboardPanel = () => {
-  const { analytics, systemControls } = useAppSelector((state) => state.admin);
-  const dispatch = useAppDispatch();
-
-  return (
-    <div className="space-y-6">
-      {/* System Controls */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          System Controls
-        </h3>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-            <span className="text-gray-700 dark:text-gray-300">Diagnostics</span>
-            <button
-              onClick={() => dispatch(toggleDiagnostics())}
-              className={`w-10 h-5 rounded-full transition-colors ${
-                systemControls.diagnostics ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
-              }`}
-            >
-              <div
-                className={`w-4 h-4 bg-white rounded-full transition-transform ${
-                  systemControls.diagnostics ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-            <span className="text-gray-700 dark:text-gray-300">Stat System</span>
-            <button
-              onClick={() => dispatch(toggleStatSystem())}
-              className={`w-10 h-5 rounded-full transition-colors ${
-                systemControls.statSystem ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
-              }`}
-            >
-              <div
-                className={`w-4 h-4 bg-white rounded-full transition-transform ${
-                  systemControls.statSystem ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-            <span className="text-gray-700 dark:text-gray-300">System Screen</span>
-            <button
-              onClick={() => dispatch(toggleSystemScreen())}
-              className={`w-10 h-5 rounded-full transition-colors ${
-                systemControls.systemScreen ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
-              }`}
-            >
-              <div
-                className={`w-4 h-4 bg-white rounded-full transition-transform ${
-                  systemControls.systemScreen ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-            <span className="text-gray-700 dark:text-gray-300">Reality Integration</span>
-            <button
-              onClick={() => dispatch(toggleRealityIntegration())}
-              className={`w-10 h-5 rounded-full transition-colors ${
-                systemControls.realityIntegration ? 'bg-primary-600' : 'bg-gray-300 dark:bg-gray-600'
-              }`}
-            >
-              <div
-                className={`w-4 h-4 bg-white rounded-full transition-transform ${
-                  systemControls.realityIntegration ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Analytics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
-          <div className="flex items-center space-x-2 mb-4">
-            <BarChart3 className="w-5 h-5 text-primary-600" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Story Metrics</h3>
-          </div>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Total Chapters</span>
-              <span className="font-semibold text-gray-900 dark:text-white">
-                {analytics.storyMetrics.totalChapters}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Total Words</span>
-              <span className="font-semibold text-gray-900 dark:text-white">
-                {analytics.storyMetrics.totalWords.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Avg Chapter Length</span>
-              <span className="font-semibold text-gray-900 dark:text-white">
-                {analytics.storyMetrics.averageChapterLength.toLocaleString()} words
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Continuity Score</span>
-              <span className="font-semibold text-green-600">
-                {analytics.storyMetrics.continuityScore}%
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
-          <div className="flex items-center space-x-2 mb-4">
-            <Activity className="w-5 h-5 text-green-600" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">System Health</h3>
-          </div>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Success Rate</span>
-              <span className="font-semibold text-green-600">
-                {analytics.systemHealth.generationSuccessRate}%
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Error Count</span>
-              <span className="font-semibold text-red-600">
-                {analytics.systemHealth.errorCount}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Resource Usage</span>
-              <span className="font-semibold text-yellow-600">
-                {analytics.systemHealth.resourceUsage}%
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600 dark:text-gray-400">Performance</span>
-              <span className="font-semibold text-blue-600">
-                {analytics.systemHealth.performanceScore}%
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Reader Engagement */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
-        <div className="flex items-center space-x-2 mb-4">
-          <Users className="w-5 h-5 text-purple-600" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Reader Engagement</h3>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Total Readers</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {analytics.readerEngagement.totalReaders}
-            </p>
-          </div>
-          <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Active Now</p>
-            <p className="text-2xl font-bold text-green-600">
-              {analytics.readerEngagement.activeReaders}
-            </p>
-          </div>
-          <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Avg Session</p>
-            <p className="text-2xl font-bold text-blue-600">
-              {Math.floor(analytics.readerEngagement.averageSessionTime / 60)}m
-            </p>
-          </div>
-          <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Popular Chapter</p>
-            <p className="text-2xl font-bold text-purple-600">
-              #{analytics.readerEngagement.popularChapters[0] || 1}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Main Admin Panel Component
 const AdminPanel = () => {
-  const [activeTab, setActiveTab] = useState<'command' | 'story' | 'dashboard' | 'users'>('command');
+  const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const { user } = useAppSelector((s) => s.user);
+  const { data: adminData, isGenerating } = useAppSelector((s) => s.admin);
+
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [storyPromptInput, setStoryPromptInput] = useState('');
+  const [genCount, setGenCount] = useState(1);
+
+  // Redirect non-admin
+  useEffect(() => {
+    if (!user || user.role !== 'admin') {
+      navigate('/');
+    }
+  }, [user, navigate]);
+
+  // Load admin state
+  const refreshAdminState = useCallback(async () => {
+    try {
+      const state = await api.getAdminState();
+      dispatch(setAdminData(state));
+      setStoryPromptInput(state.storyConfig.storyPrompt);
+    } catch (err) {
+      dispatch(addToast({ type: 'error', message: 'Failed to load admin state', duration: 3000 }));
+    }
+  }, [dispatch]);
+
+  useEffect(() => { refreshAdminState(); }, [refreshAdminState]);
+
+  // Set API Key
+  const handleSetApiKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    try {
+      await api.setApiKey(apiKeyInput.trim());
+      setApiKeyInput('');
+      dispatch(addToast({ type: 'success', message: 'API key configured!', duration: 3000 }));
+      refreshAdminState();
+    } catch (err) {
+      dispatch(addToast({ type: 'error', message: 'Failed to set API key', duration: 3000 }));
+    }
+  };
+
+  // Generate chapters
+  const handleGenerate = async () => {
+    dispatch(setGenerating(true));
+    try {
+      const result = await api.generateChapters(genCount);
+      if (result.ok) {
+        dispatch(addToast({ type: 'success', message: `Generated ${result.generated} chapter(s)! Total: ${result.totalChapters}`, duration: 4000 }));
+      } else {
+        dispatch(addToast({ type: 'warning', message: result.error || 'Could not generate', duration: 4000 }));
+      }
+      refreshAdminState();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Generation failed';
+      dispatch(addToast({ type: 'error', message: msg, duration: 4000 }));
+    } finally {
+      dispatch(setGenerating(false));
+    }
+  };
+
+  // Update story config
+  const handleConfigUpdate = async (updates: Partial<api.StoryConfig>) => {
+    try {
+      const { config } = await api.updateStoryConfig(updates);
+      if (adminData) {
+        dispatch(setAdminData({ ...adminData, storyConfig: config }));
+      }
+    } catch {
+      dispatch(addToast({ type: 'error', message: 'Failed to update config', duration: 3000 }));
+    }
+  };
+
+  // Delete chapter
+  const handleDeleteChapter = async (chapterNum: number) => {
+    if (chapterNum === 1) {
+      dispatch(addToast({ type: 'warning', message: 'Cannot delete Chapter 1 (seed chapter)', duration: 3000 }));
+      return;
+    }
+    try {
+      await api.deleteChapter(chapterNum);
+      dispatch(addToast({ type: 'success', message: `Chapter ${chapterNum} deleted`, duration: 3000 }));
+      refreshAdminState();
+    } catch {
+      dispatch(addToast({ type: 'error', message: 'Failed to delete chapter', duration: 3000 }));
+    }
+  };
+
+  if (!adminData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <RefreshCw className="animate-spin h-8 w-8 text-purple-600" />
+      </div>
+    );
+  }
+
+  const config = adminData.storyConfig;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-6 py-8">
         {/* Header */}
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Admin Panel
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Admin Panel</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Full administrative control over the Endless Story Engine
+            Control the Endless Story Engine &mdash; AI-powered chapter generation
           </p>
         </header>
 
-        {/* Tabs */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md mb-6">
-          <div className="flex overflow-x-auto">
-            <Tab
-              label="Command Box"
-              icon={Terminal}
-              active={activeTab === 'command'}
-              onClick={() => setActiveTab('command')}
-            />
-            <Tab
-              label="Story Generation"
-              icon={BookOpen}
-              active={activeTab === 'story'}
-              onClick={() => setActiveTab('story')}
-            />
-            <Tab
-              label="Dashboard"
-              icon={BarChart3}
-              active={activeTab === 'dashboard'}
-              onClick={() => setActiveTab('dashboard')}
-            />
-            <Tab
-              label="Users"
-              icon={Users}
-              active={activeTab === 'users'}
-              onClick={() => setActiveTab('users')}
-            />
+        {/* Status Overview */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Total Chapters</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{adminData.totalChapters}</p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Admin Last Read</p>
+            <p className="text-2xl font-bold text-purple-600">{adminData.lastReadChapter}</p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Max Allowed</p>
+            <p className="text-2xl font-bold text-blue-600">{adminData.maxAllowedChapters}</p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
+            <p className="text-sm text-gray-500 dark:text-gray-400">API Key</p>
+            <p className="text-lg font-bold flex items-center space-x-2">
+              {adminData.apiKeyConfigured
+                ? <><CheckCircle size={18} className="text-green-500" /><span className="text-green-600">Set</span></>
+                : <><AlertTriangle size={18} className="text-yellow-500" /><span className="text-yellow-600">Not Set</span></>
+              }
+            </p>
           </div>
         </div>
 
-        {/* Tab Content */}
-        <div className="space-y-6">
-          {activeTab === 'command' && <CommandBox />}
-          {activeTab === 'story' && <StoryGenerationPanel />}
-          {activeTab === 'dashboard' && <DashboardPanel />}
-          {activeTab === 'users' && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                User Management
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                User management interface coming soon...
-              </p>
+        {/* How It Works */}
+        <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-6 mb-8">
+          <h3 className="font-semibold text-purple-800 dark:text-purple-300 mb-2">How Chapter Generation Works</h3>
+          <ul className="text-sm text-purple-700 dark:text-purple-400 space-y-1">
+            <li>1. Set your Anthropic API key below (required for AI generation)</li>
+            <li>2. When you (admin) read a chapter, the system automatically generates up to 5 chapters ahead</li>
+            <li>3. The cap = your last read chapter + 5. If you've read chapter 3, max chapters is 8</li>
+            <li>4. Regular users can only read existing chapters &mdash; only admin reading triggers generation</li>
+            <li>5. You can also manually generate chapters using the button below</li>
+          </ul>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* API Key Configuration */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
+            <div className="flex items-center space-x-2 mb-4">
+              <Key className="w-5 h-5 text-purple-600" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">API Key</h3>
             </div>
-          )}
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Set your Anthropic API key to enable AI chapter generation.
+            </p>
+            <div className="flex space-x-2">
+              <input
+                type="password"
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder="sk-ant-..."
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-sm"
+              />
+              <button onClick={handleSetApiKey}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium">
+                Save
+              </button>
+            </div>
+          </div>
+
+          {/* Manual Generation */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
+            <div className="flex items-center space-x-2 mb-4">
+              <Zap className="w-5 h-5 text-yellow-600" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Generate Chapters</h3>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Manually generate chapters (still respects the 5-ahead cap).
+            </p>
+            <div className="flex items-center space-x-2">
+              <label className="text-sm text-gray-600 dark:text-gray-300">Count:</label>
+              <input type="number" min={1} max={5} value={genCount} onChange={(e) => setGenCount(Math.max(1, Math.min(5, parseInt(e.target.value) || 1)))}
+                className="w-16 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-sm" />
+              <button onClick={handleGenerate} disabled={isGenerating || !adminData.apiKeyConfigured}
+                className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
+                {isGenerating ? <><RefreshCw size={16} className="animate-spin" /><span>Generating...</span></> : <><Zap size={16} /><span>Generate</span></>}
+              </button>
+            </div>
+            {!adminData.apiKeyConfigured && (
+              <p className="text-xs text-red-500 mt-2">Set an API key first to enable generation.</p>
+            )}
+            {adminData.totalChapters >= adminData.maxAllowedChapters && (
+              <p className="text-xs text-yellow-600 mt-2">Cap reached! Read more chapters to allow generation of new ones.</p>
+            )}
+          </div>
+
+          {/* Story Config */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md lg:col-span-2">
+            <div className="flex items-center space-x-2 mb-4">
+              <Settings className="w-5 h-5 text-blue-600" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Story Configuration</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Tone: <span className="capitalize">{config.tone}</span>
+                </label>
+                <div className="flex space-x-2">
+                  {(['light', 'neutral', 'dark'] as const).map((t) => (
+                    <button key={t} onClick={() => handleConfigUpdate({ tone: t })}
+                      className={`px-3 py-1.5 rounded text-sm capitalize ${config.tone === t ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Pacing: {config.pacing}/10
+                </label>
+                <input type="range" min={1} max={10} value={config.pacing}
+                  onChange={(e) => handleConfigUpdate({ pacing: parseInt(e.target.value) })} className="w-full" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Tension: {config.tension}/10
+                </label>
+                <input type="range" min={1} max={10} value={config.tension}
+                  onChange={(e) => handleConfigUpdate({ tension: parseInt(e.target.value) })} className="w-full" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Chapter Length
+                </label>
+                <div className="flex space-x-2">
+                  {(['short', 'medium', 'long'] as const).map((l) => (
+                    <button key={l} onClick={() => handleConfigUpdate({ chapterLength: l })}
+                      className={`px-3 py-1.5 rounded text-sm capitalize ${config.chapterLength === l ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Story Prompt */}
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Story Direction (optional custom prompt for AI)
+              </label>
+              <div className="flex space-x-2">
+                <textarea value={storyPromptInput} onChange={(e) => setStoryPromptInput(e.target.value)}
+                  placeholder="E.g., 'In the next chapters, Kael should encounter a rival vampire player...'"
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-sm resize-none"
+                  rows={3} />
+                <button onClick={() => handleConfigUpdate({ storyPrompt: storyPromptInput })}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium self-end">
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Chapter List */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md lg:col-span-2">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <BookOpen className="w-5 h-5 text-green-600" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">All Chapters ({adminData.chapters.length})</h3>
+              </div>
+              <button onClick={refreshAdminState} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                <RefreshCw size={16} className="text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {adminData.chapters.map((ch) => (
+                <div key={ch.chapterNumber} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${ch.world === 'vr' ? 'bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}>
+                      {ch.world === 'vr' ? 'VR' : 'Real'}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{ch.title}</p>
+                      <p className="text-xs text-gray-500">{ch.wordCount.toLocaleString()} words</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button onClick={() => navigate(`/read/${ch.chapterNumber}`)}
+                      className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600" title="Read">
+                      <Eye size={14} className="text-gray-500" />
+                    </button>
+                    {ch.chapterNumber > 1 && (
+                      <button onClick={() => handleDeleteChapter(ch.chapterNumber)}
+                        className="p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30" title="Delete">
+                        <Trash2 size={14} className="text-red-500" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
