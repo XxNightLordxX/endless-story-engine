@@ -5,12 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:server": "tsx --watch server/index.ts",
-    "dev:all": "npm run dev:server & npm run dev",
     "build": "tsc -b tsconfig.app.json && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "server": "tsx server/index.ts"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
