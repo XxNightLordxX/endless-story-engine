@@ -4,7 +4,7 @@ import { useAppDispatch, useAppSelector } from '../hooks/useRedux';
 import { setAdminData, setGenerating } from '../store/slices/adminSlice';
 import { addToast } from '../store/slices/uiSlice';
 import {
-  BookOpen, Settings, Key, Trash2, RefreshCw, Zap, Eye, AlertTriangle, CheckCircle
+  BookOpen, Settings, Trash2, RefreshCw, Zap, Eye, CheckCircle
 } from 'lucide-react';
 import * as api from '../api';
 
@@ -14,7 +14,6 @@ const AdminPanel = () => {
   const { user } = useAppSelector((s) => s.user);
   const { data: adminData, isGenerating } = useAppSelector((s) => s.admin);
 
-  const [apiKeyInput, setApiKeyInput] = useState('');
   const [storyPromptInput, setStoryPromptInput] = useState('');
   const [genCount, setGenCount] = useState(1);
 
@@ -37,19 +36,6 @@ const AdminPanel = () => {
   }, [dispatch]);
 
   useEffect(() => { refreshAdminState(); }, [refreshAdminState]);
-
-  // Set API Key
-  const handleSetApiKey = async () => {
-    if (!apiKeyInput.trim()) return;
-    try {
-      await api.setApiKey(apiKeyInput.trim());
-      setApiKeyInput('');
-      dispatch(addToast({ type: 'success', message: 'API key configured!', duration: 3000 }));
-      refreshAdminState();
-    } catch (err) {
-      dispatch(addToast({ type: 'error', message: 'Failed to set API key', duration: 3000 }));
-    }
-  };
 
   // Generate chapters
   const handleGenerate = async () => {
@@ -114,7 +100,7 @@ const AdminPanel = () => {
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Admin Panel</h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Control the Endless Story Engine &mdash; AI-powered chapter generation
+            Control the Endless Story Engine &mdash; procedural chapter generation
           </p>
         </header>
 
@@ -133,12 +119,9 @@ const AdminPanel = () => {
             <p className="text-2xl font-bold text-blue-600">{adminData.maxAllowedChapters}</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
-            <p className="text-sm text-gray-500 dark:text-gray-400">API Key</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Engine</p>
             <p className="text-lg font-bold flex items-center space-x-2">
-              {adminData.apiKeyConfigured
-                ? <><CheckCircle size={18} className="text-green-500" /><span className="text-green-600">Set</span></>
-                : <><AlertTriangle size={18} className="text-yellow-500" /><span className="text-yellow-600">Not Set</span></>
-              }
+              <CheckCircle size={18} className="text-green-500" /><span className="text-green-600">Ready</span>
             </p>
           </div>
         </div>
@@ -147,7 +130,7 @@ const AdminPanel = () => {
         <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-6 mb-8">
           <h3 className="font-semibold text-purple-800 dark:text-purple-300 mb-2">How Chapter Generation Works</h3>
           <ul className="text-sm text-purple-700 dark:text-purple-400 space-y-1">
-            <li>1. Set your Anthropic API key below (required for AI generation)</li>
+            <li>1. Chapters are generated instantly using the built-in story engine &mdash; no API key needed</li>
             <li>2. When you (admin) read a chapter, the system automatically generates up to 5 chapters ahead</li>
             <li>3. The cap = your last read chapter + 5. If you've read chapter 3, max chapters is 8</li>
             <li>4. Regular users can only read existing chapters &mdash; only admin reading triggers generation</li>
@@ -156,32 +139,8 @@ const AdminPanel = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* API Key Configuration */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
-            <div className="flex items-center space-x-2 mb-4">
-              <Key className="w-5 h-5 text-purple-600" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">API Key</h3>
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              Set your Anthropic API key to enable AI chapter generation.
-            </p>
-            <div className="flex space-x-2">
-              <input
-                type="password"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="sk-ant-..."
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-sm"
-              />
-              <button onClick={handleSetApiKey}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium">
-                Save
-              </button>
-            </div>
-          </div>
-
           {/* Manual Generation */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md lg:col-span-2">
             <div className="flex items-center space-x-2 mb-4">
               <Zap className="w-5 h-5 text-yellow-600" />
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Generate Chapters</h3>
@@ -193,14 +152,11 @@ const AdminPanel = () => {
               <label className="text-sm text-gray-600 dark:text-gray-300">Count:</label>
               <input type="number" min={1} max={5} value={genCount} onChange={(e) => setGenCount(Math.max(1, Math.min(5, parseInt(e.target.value) || 1)))}
                 className="w-16 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-sm" />
-              <button onClick={handleGenerate} disabled={isGenerating || !adminData.apiKeyConfigured}
+              <button onClick={handleGenerate} disabled={isGenerating}
                 className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium">
                 {isGenerating ? <><RefreshCw size={16} className="animate-spin" /><span>Generating...</span></> : <><Zap size={16} /><span>Generate</span></>}
               </button>
             </div>
-            {!adminData.apiKeyConfigured && (
-              <p className="text-xs text-red-500 mt-2">Set an API key first to enable generation.</p>
-            )}
             {adminData.totalChapters >= adminData.maxAllowedChapters && (
               <p className="text-xs text-yellow-600 mt-2">Cap reached! Read more chapters to allow generation of new ones.</p>
             )}
@@ -262,7 +218,7 @@ const AdminPanel = () => {
             {/* Story Prompt */}
             <div className="mt-6">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Story Direction (optional custom prompt for AI)
+                Story Direction (optional — influences generated chapter themes)
               </label>
               <div className="flex space-x-2">
                 <textarea value={storyPromptInput} onChange={(e) => setStoryPromptInput(e.target.value)}

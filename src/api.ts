@@ -1,5 +1,5 @@
-// Fully client-side API layer — all data in localStorage, AI calls direct to Anthropic.
-// No backend server needed. Works on GitHub Pages.
+// Fully client-side API layer — all data in localStorage, chapters generated locally.
+// No backend server or API keys needed. Works on GitHub Pages for free.
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,7 +59,6 @@ const KEYS = {
   users: 'ese_users',
   admin: 'ese_admin',
   config: 'ese_config',
-  apiKey: 'ese_api_key',
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -300,14 +299,13 @@ export async function getChapter(chapterNumber: number): Promise<{ chapter: Chap
   return { chapter };
 }
 
-// ─── Admin (localStorage + direct Anthropic API calls) ────────────────────────
+// ─── Admin (localStorage + built-in chapter generation) ───────────────────────
 
 export async function getAdminState(): Promise<AdminState> {
   const admin = read<{ lastReadChapter: number }>(KEYS.admin, { lastReadChapter: 0 });
   const chapters = read<Chapter[]>(KEYS.chapters, []);
   const users = read<StoredUser[]>(KEYS.users, []);
   const config = read<StoryConfig>(KEYS.config, DEFAULT_CONFIG);
-  const apiKey = localStorage.getItem(KEYS.apiKey) || '';
 
   return {
     lastReadChapter: admin.lastReadChapter,
@@ -315,7 +313,7 @@ export async function getAdminState(): Promise<AdminState> {
     maxAllowedChapters: admin.lastReadChapter + 5,
     storyConfig: config,
     totalUsers: users.length,
-    apiKeyConfigured: !!apiKey,
+    apiKeyConfigured: true, // Always true — no API key needed
     chapters: chapters.map((ch) => ({
       id: ch.id,
       chapterNumber: ch.chapterNumber,
@@ -334,7 +332,6 @@ export async function markChapterRead(
 ): Promise<{ ok: boolean; generated: number; totalChapters: number; adminLastRead: number; message?: string }> {
   if (!chapterNumber || !userId) throw new Error('chapterNumber and userId are required');
 
-  // Non-admin: just track reading
   if (userId !== ADMIN_ACCOUNT.id) {
     const users = read<StoredUser[]>(KEYS.users, []);
     const user = users.find((u) => u.id === userId);
@@ -345,7 +342,6 @@ export async function markChapterRead(
     return { ok: true, generated: 0, totalChapters: read<Chapter[]>(KEYS.chapters, []).length, adminLastRead: 0 };
   }
 
-  // Admin: update last read + auto-generate
   const admin = read<{ lastReadChapter: number }>(KEYS.admin, { lastReadChapter: 0 });
   const newLastRead = Math.max(admin.lastReadChapter, chapterNumber);
   write(KEYS.admin, { lastReadChapter: newLastRead });
@@ -364,7 +360,6 @@ export async function markChapterRead(
     };
   }
 
-  // Auto-generate chapters
   let generated = 0;
   const config = read<StoryConfig>(KEYS.config, DEFAULT_CONFIG);
 
@@ -375,15 +370,10 @@ export async function markChapterRead(
     const world: 'real' | 'vr' =
       previousChapter && previousChapter.world === 'real' ? 'vr' : 'real';
 
-    try {
-      const chapter = await callAnthropicForChapter(nextNumber, world, previousChapter, currentChapters, config);
-      currentChapters.push(chapter);
-      write(KEYS.chapters, currentChapters);
-      generated++;
-    } catch (err) {
-      console.error(`Failed to generate chapter ${nextNumber}:`, err);
-      break;
-    }
+    const chapter = generateChapterContent(nextNumber, world, previousChapter, config);
+    currentChapters.push(chapter);
+    write(KEYS.chapters, currentChapters);
+    generated++;
   }
 
   return {
@@ -401,9 +391,8 @@ export async function updateStoryConfig(config: Partial<StoryConfig>): Promise<{
   return { ok: true, config: updated };
 }
 
-export async function setApiKey(apiKey: string): Promise<{ ok: boolean }> {
-  if (!apiKey) throw new Error('API key required');
-  localStorage.setItem(KEYS.apiKey, apiKey);
+export async function setApiKey(_apiKey: string): Promise<{ ok: boolean }> {
+  // No-op: API key no longer needed
   return { ok: true };
 }
 
@@ -432,15 +421,10 @@ export async function generateChapters(count: number = 1): Promise<{ ok: boolean
     const world: 'real' | 'vr' =
       previousChapter && previousChapter.world === 'real' ? 'vr' : 'real';
 
-    try {
-      const chapter = await callAnthropicForChapter(nextNumber, world, previousChapter, currentChapters, config);
-      currentChapters.push(chapter);
-      write(KEYS.chapters, currentChapters);
-      generated++;
-    } catch (err) {
-      console.error(`Failed to generate chapter ${nextNumber}:`, err);
-      break;
-    }
+    const chapter = generateChapterContent(nextNumber, world, previousChapter, config);
+    currentChapters.push(chapter);
+    write(KEYS.chapters, currentChapters);
+    generated++;
   }
 
   return {
@@ -457,169 +441,511 @@ export async function deleteChapter(chapterNumber: number): Promise<{ ok: boolea
   return { ok: true };
 }
 
-// ─── AI Chapter Generation (direct Anthropic API call from browser) ───────────
+// ─── Built-in Chapter Generator (no API needed) ──────────────────────────────
+// Uses a seeded PRNG keyed to the chapter number so each chapter is unique
+// and deterministic (regenerating chapter N always gives the same result).
+// Content is parametric — scenes take chapter number, level, NPC names, locations
+// as inputs and produce varied prose, preventing repetition across chapters.
 
-const STORY_BIBLE = `You are the narrative engine for "Endless Story Engine" — an infinite, serialized dark fantasy / LitRPG web novel.
+// Seeded PRNG (mulberry32) — deterministic per chapter number
+function createRng(seed: number) {
+  let t = seed + 0x6d2b79f5;
+  return () => {
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
-CORE STORY:
-- Protagonist: Kael, a young man whose sister Yuna lies in a coma after a mysterious accident
-- Kael receives a VR headset and logs into "Eclipsis Online," the world's most popular VRMMORPG
-- The system assigns him a forbidden class: Vampire Progenitor — a remnant of an abandoned expansion that shouldn't exist
-- As Kael progresses in the VR world, his in-game powers begin bleeding into reality (stat-merging)
-- His agility increases, senses sharpen, eyes adjust to darkness. Skills learned in-game affect his real body
-- The line between the VR world and reality thins over time
+function pick<T>(arr: T[], rng: () => number): T {
+  return arr[Math.floor(rng() * arr.length)];
+}
 
-KEY CHARACTERS:
-- Kael: Protagonist. Carries grief and determination. Becomes increasingly powerful but haunted
-- Yuna: Kael's sister, in a coma. May have a deeper connection to Eclipsis Online than anyone knows
-- Alex: Kael's best friend, supportive but growing worried about changes in Kael
-- NPCs in Eclipsis Online: Various guild leaders, merchants, quest givers, rivals, and mysterious figures
+function pickN<T>(arr: T[], n: number, rng: () => number): T[] {
+  const shuffled = [...arr].sort(() => rng() - 0.5);
+  return shuffled.slice(0, Math.min(n, arr.length));
+}
 
-DUAL-WORLD STRUCTURE:
-- Chapters alternate between "real" world (Kael's apartment, hospital, city) and "vr" world (Eclipsis Online)
-- Real world chapters: Focus on Kael's daily life, hospital visits, relationships, and the growing reality bleed
-- VR world chapters: Focus on quests, combat, leveling up, discovering lore, meeting NPCs, dungeon crawling
-- The worlds should gradually feel more connected as the story progresses
+// ── VR World story data ──
 
-TONE: Dark, atmospheric, emotionally grounded. Moments of hope cut with tension. The VR world feels vivid and dangerous. The real world feels lonely and desperate.
+const VR_TITLE_ADJ = [
+  'Blood', 'Crimson', 'Shadow', 'Dark', 'Fallen', 'Shattered', 'Forsaken', 'Hollow',
+  'Burning', 'Silent', 'Frozen', 'Obsidian', 'Phantom', 'Cursed', 'Fractured', 'Abyssal',
+  'Rusted', 'Wailing', 'Ashen', 'Moonlit', 'Tainted', 'Twisted', 'Veiled', 'Ancient',
+  'Forgotten', 'Blighted', 'Feral', 'Ethereal', 'Scarlet', 'Iron', 'Bone', 'Void',
+];
 
-LITRPG ELEMENTS (VR chapters):
-- Include system notifications, stat changes, skill unlocks, and level-ups naturally woven into the narrative
-- Format system messages in **bold** or with [System] tags
-- Show Kael discovering new abilities and their costs (blood essence, mana, etc.)
-- Include quest updates and progression
+const VR_TITLE_NOUN = [
+  'Sanctum', 'Dominion', 'Descent', 'Throne', 'Awakening', 'Hunt', 'Requiem', 'Reckoning',
+  'Crucible', 'Labyrinth', 'Protocol', 'Covenant', 'Convergence', 'Eclipse', 'Ascension',
+  'Vanguard', 'Genesis', 'Cataclysm', 'Onslaught', 'Revelation', 'Dirge', 'Exodus',
+  'Pact', 'Siege', 'Trial', 'Vigil', 'Harbinger', 'Tempest', 'Rift', 'Bloodline',
+  'Apex', 'Schism', 'Maelstrom', 'Inferno', 'Oblivion', 'Prophecy', 'Gambit', 'Zenith',
+];
 
-WRITING STYLE:
-- Third person limited (Kael's perspective)
-- Vivid sensory details
-- Short, punchy dialogue mixed with internal reflection
-- End each chapter with a hook or cliffhanger
-- Each chapter should feel complete yet leave the reader wanting more`;
+const VR_LOC_PREFIX = [
+  'The Crimson', 'The Obsidian', 'The Shattered', 'The Forgotten', 'The Hollow',
+  'The Wailing', 'The Burning', 'The Silent', 'The Frozen', 'The Ashen',
+  'The Bleeding', 'The Cursed', 'The Rusted', 'The Veiled', 'The Sunken',
+  'The Ironbound', 'The Gilded', 'The Withered', 'The Phantom', 'The Dread',
+  'The Blighted', 'The Scarlet', 'The Moonlit', 'The Bone', 'The Storm',
+  'The Void', 'The Amber', 'The Twilight', 'The Ancient', 'The Feral',
+];
 
-async function callAnthropicForChapter(
+const VR_LOC_SUFFIX = [
+  'Spire', 'Forest', 'Undercrypt', 'Arena', 'Cathedral', 'Ruins', 'Citadel',
+  'Mines', 'Marsh', 'Fortress', 'Rift', 'Outpost', 'Garden', 'Summit',
+  'Caverns', 'Wastes', 'Sanctum', 'Depths', 'Catacombs', 'Passage',
+  'Grotto', 'Throne Room', 'Labyrinth', 'Pit', 'Nexus', 'Vault',
+  'Chamber', 'Bazaar', 'Crossing', 'Gate', 'Expanse', 'Monolith',
+  'Altar', 'Barracks', 'Oubliette', 'Archive', 'Watchtower', 'Dungeon',
+];
+
+const NPC_FIRST = [
+  'Seraphina', 'Vex', 'Aldric', 'Mira', 'Grimjaw', 'Elara', 'Thorne', 'Izara',
+  'Fenris', 'Kaelith', 'Dorian', 'Lyra', 'Magnus', 'Sable', 'Rhea', 'Corvus',
+  'Zara', 'Hadrian', 'Nyx', 'Orion', 'Vesper', 'Caine', 'Selene', 'Mordecai',
+  'Ashara', 'Darius', 'Freya', 'Gideon', 'Helena', 'Jasper', 'Kira', 'Lucian',
+  'Morwen', 'Nero', 'Petra', 'Quinn', 'Rowan', 'Sylvaine', 'Tobias', 'Uriel',
+  'Vivienne', 'Wren', 'Xander', 'Ysolde', 'Zarek', 'Aria', 'Bane', 'Celeste',
+];
+
+const NPC_TITLE = [
+  'the Blade Dancer', 'the Shadow Broker', 'the Alchemist', 'the Pale Oracle',
+  'the Berserker', 'the Blood Mage', 'the Lone Wolf', 'the Masked Merchant',
+  'the Iron Sentinel', 'the Void Walker', 'the Storm Caller', 'the Bone Witch',
+  'the Silver Knight', 'the Dread Archer', 'the Flame Keeper', 'the Frost Seer',
+  'the Beast Tamer', 'the Death Singer', 'the Soul Binder', 'the War Priest',
+  'the Rune Carver', 'the Mind Breaker', 'the Night Warden', 'the Grave Walker',
+  'the Plague Doctor', 'the Hex Weaver', 'the Chain Master', 'the Ash Born',
+  'the Thorn Knight', 'the Mist Stalker', 'the Ember Sage', 'the Crystal Gazer',
+];
+
+// Generate a location name from prefix+suffix, seeded
+function makeLocation(rng: () => number): string {
+  return `${pick(VR_LOC_PREFIX, rng)} ${pick(VR_LOC_SUFFIX, rng)}`;
+}
+
+// Generate an NPC name from first+title, seeded
+function makeNpc(rng: () => number): string {
+  return `${pick(NPC_FIRST, rng)} ${pick(NPC_TITLE, rng)}`;
+}
+
+// Parametric system notifications — use chapter number and level for uniqueness
+const SYSTEM_TEMPLATES: ((ch: number, lvl: number) => string)[] = [
+  (ch, lvl) => `**[System: Level Up! You are now Level ${lvl}. Stat points available: ${lvl + ch % 3}.]**`,
+  (_ch, lvl) => `**[System: Blood Essence capacity increased. Current reserve: ${lvl * 150}/${lvl * 200}.]**`,
+  (ch, _lvl) => `**[System: Hidden quest discovered — "The Progenitor's Legacy, Part ${((ch - 1) % 7) + 1}." Accept? Y/N]**`,
+  (ch, lvl) => `**[System: Passive ability "Nightsight" has evolved to Rank ${Math.min(lvl, 10)}. Visual acuity in darkness: +${lvl * 8 + ch}%.]**`,
+  (ch, _lvl) => `**[System: Warning — Forbidden class activity spike #${ch}. Monitoring protocols engaged.]**`,
+  (ch, lvl) => `**[System: Skill unlocked — "${pick(['Crimson Surge', 'Blood Lance', 'Shadow Step', 'Hemoglobin Shield', 'Sanguine Whip', 'Nightfall Strike', 'Progenitor\'s Grasp', 'Arterial Burst', 'Vein Tap', 'Dusk Reaver', 'Plasma Wave', 'Corpuscle Storm', 'Iron Will', 'Red Mist', 'Marrow Drain', 'Claret Nova', 'Vital Siphon', 'Scarlet Tempest', 'Phlebotomy', 'Essence Rend'], createRng(ch * 97 + lvl))}" — Damage: ${(150 + lvl * 30 + ch * 5)}. Cost: ${50 + lvl * 3} BE.]**`,
+  (ch, _lvl) => `**[System: Bloodline resonance detected. Reality anchor integrity: ${Math.max(5, 95 - ch * 3)}%.]**`,
+  (ch, lvl) => `**[System: Dungeon clear! Rewards: ${lvl * 200 + ch * 50} Gold, ${lvl * 30 + ch * 10} XP, 1x ${pick(['Rare', 'Epic', 'Legendary', 'Mythical', 'Cursed', 'Abyssal', 'Progenitor'], createRng(ch * 31))} Equipment Chest.]**`,
+  (ch, _lvl) => `**[System: A powerful entity has taken notice of you. Reputation with "${pick(['"The Old Ones"', '"The Architects"', '"The First Blood"', '"The Sealed Council"', '"The Dreamweavers"', '"The Forgotten Ones"', '"The Code Walkers"', '"The Hollow Court"'], createRng(ch * 43))}": ${pick(['Curious', 'Wary', 'Intrigued', 'Hostile', 'Respectful', 'Watchful', 'Fascinated', 'Alarmed'], createRng(ch * 59))}.]**`,
+  (ch, lvl) => `**[System: Stat merge in progress. Physical enhancement: ${lvl * 3 + ch}% above baseline. Caution advised.]**`,
+  (ch, lvl) => `**[System: New area discovered. Threat level: ${Math.min(10, Math.floor(lvl / 2) + 1)}. Recommended level: ${lvl + ch % 5}. Proceed with caution.]**`,
+  (ch, _lvl) => `**[System: Bloodline memory fragment ${ch % 20 + 1}/20 recovered. The Progenitor's past unfolds.]**`,
+  (ch, lvl) => `**[System: Class evolution progress: ${Math.min(100, lvl * 5 + ch * 2)}%. Next threshold: ${pick(['Blood Lord', 'Nosferatu Prime', 'Crimson Sovereign', 'Daywalker', 'Apex Predator', 'Eternal Night', 'The First Fang'], createRng(ch * 71))}.]**`,
+  (_ch, lvl) => `**[System: Party member detected nearby. Compatibility rating: ${pick(['High', 'Moderate', 'Exceptional', 'Unstable', 'Volatile', 'Resonant'], createRng(lvl * 89))}.]**`,
+  (ch, lvl) => `**[System: Achievement unlocked — "${pick(['First Blood', 'Century Kill', 'Shadow Walker', 'Dungeon Breaker', 'Lore Master', 'Beast Slayer', 'Night Sovereign', 'Blood Oath', 'Silent Death', 'Progenitor Rising', 'Veil Piercer', 'Bone Collector', 'Soul Drinker', 'Crimson Dawn', 'The Unbound'], createRng(ch * 107 + lvl))}." Title available.]**`,
+];
+
+const VR_COMBAT_SCENES = [
+  (npc: string, loc: string) => `The creature lunged from the shadows of ${loc}, its claws slicing through the air where Kael's head had been a heartbeat before. His body moved before his mind could process—faster than it should have, faster than any human had a right to move.
+
+"Progenitor reflexes," ${npc} observed from the archway, arms crossed. "Impressive. Most players would be dead by now."
+
+Kael didn't respond. He was too busy watching the creature's movements, reading its patterns the way a predator reads prey. His eyes had shifted—he could feel it—the world taking on a crimson tint that made every motion trail like smoke in still air.
+
+He dodged again, this time closing the distance. His hand found the creature's throat, and he squeezed. Not with strength he'd earned through training, but with something older. Something that lived in his blood and whispered of ancient dominion.
+
+The creature dissolved into shadow and experience points.`,
+
+  (npc: string, loc: string) => `${loc} was a maze of collapsed pillars and whispering darkness. Every shadow could hide a threat, and in this dungeon, most of them did.
+
+"Stay close," ${npc} warned, their weapon drawn. "The mobs in this zone scale with bloodline purity. For you..." They trailed off, eyeing Kael with something between respect and fear.
+
+The first wave hit without warning. Three shadow wraiths materialized from the walls, their wails cutting through the silence like broken glass. Kael felt his class ability activate instinctively—Crimson Surge—and the world slowed to a crawl.
+
+He moved through the wraiths like a ghost through smoke. Each strike was precise, surgical, fueled by blood essence that burned like liquid fire in his veins. When the last wraith fell, he wasn't even breathing hard.
+
+But his hands were shaking. Not from exhaustion. From hunger.`,
+
+  (_npc: string, loc: string) => `The boss chamber at the heart of ${loc} was enormous—a cathedral of black stone and red crystal, lit by torches that burned with purple flame.
+
+The guardian stood in the center. Twenty feet tall, armored in what looked like fossilized bone, wielding a greatsword that hummed with dark energy. Its eyes—empty sockets that somehow still saw—fixed on Kael the moment he entered.
+
+**[System: Dungeon Boss encountered — Revenant of the Fallen Progenitor. Level: ??. Weakness: Unknown.]**
+
+"Level unknown," Kael muttered. "That's never a good sign."
+
+The Revenant attacked without preamble. Its greatsword cleaved the air with enough force to split the stone floor in two. Kael rolled, activated his enhanced speed, and felt the world sharpen into hyper-focus. Every detail crystallized—the cracks in the Revenant's armor, the slight delay in its backswing, the faint glow beneath its chestplate.
+
+There. The weak point.
+
+He struck with everything he had, channeling blood essence through his blade until it blazed crimson. The impact sent shockwaves through the chamber, cracking pillars and scattering debris.
+
+The Revenant staggered. For the first time in the fight, it looked almost... surprised.`,
+];
+
+const VR_EXPLORATION_SCENES = [
+  (npc: string, loc: string) => `${loc} stretched before him like a dream of another world. The architecture defied logic—stairs that led sideways, doors that opened onto impossible vistas, gravity that seemed more like a suggestion than a law.
+
+"First time here?" ${npc} appeared beside him, materializing from a column of silver light. "This place was built by the original developers during the beta. They say the lead designer went mad and coded his nightmares into the architecture."
+
+Kael ran his fingers along the wall. The stone felt warm. Alive, almost. Like a heartbeat thrummed just beneath the surface.
+
+"What is this place really?" he asked.
+
+${npc} was quiet for a long moment. "It's a memory," they finally said. "The game remembers what it used to be. Before they patched out the Vampire Progenitor class. Before they sealed the old bloodlines." A pause. "Before they tried to erase you."
+
+The words hung in the air between them.
+
+**[System: Lore fragment discovered. Forbidden Archive unlocked: 1/7.]**`,
+
+  (npc: string, loc: string) => `The market at ${loc} was chaos—beautiful, vibrant, overwhelming chaos. NPCs hawked potions that glowed in every color of the spectrum. Players browsed weapon racks and armor displays, their gear ranging from crude iron to shimmering mythical sets.
+
+Kael moved through the crowd like a shadow, his hood pulled low. His class marker was hidden—a trick ${npc} had taught him—but he still felt exposed. The Vampire Progenitor wasn't just rare. It was supposed to be extinct.
+
+"Here," ${npc} pressed a small vial into his hand. The liquid inside was black as midnight and moved with a viscosity that suggested it was more than simple potion. "Blood Catalyst. It'll help with the hunger. Trust me, you don't want the hunger to build."
+
+"What hunger?"
+
+${npc} gave him a look that needed no translation.
+
+He pocketed the vial and tried not to think about the way his mouth watered at the sight of the red potions on the merchant's shelf.`,
+];
+
+const VR_LORE_SCENES = [
+  (loc: string) => `Deep in the forgotten wing of ${loc}, Kael found the mural.
+
+It covered an entire wall—floor to ceiling—painted in pigments that still glowed after what must have been centuries. The scene depicted a figure wreathed in crimson light, standing at the center of a circle of kneeling forms. Above the figure, text in a language Kael didn't recognize spiraled like a crown.
+
+But his class—his blood—recognized it.
+
+The translation appeared in his mind unbidden, as natural as breathing:
+
+*"The First Blood commands the tides of life and death. From the Progenitor, all blood flows. To the Progenitor, all blood returns."*
+
+**[System: Ancient text deciphered. Progenitor Lore: The First Covenant. Your bloodline resonance has increased.]**
+
+He backed away from the mural, heart pounding. This wasn't just game lore. It felt too real, too present, too... intentional.
+
+As if someone had left this here specifically for him to find.`,
+
+  (loc: string) => `The library in ${loc} was impossible. Not in the way game environments were often impossible—with floating platforms and magical shortcuts—but in a deeper, more unsettling way. The books on the shelves changed when you weren't looking. The text rearranged itself. Some volumes seemed to breathe.
+
+Kael pulled a book from the shelf at random. Its cover was warm leather, unmarked, and when he opened it, the pages were blank.
+
+Then words appeared, writing themselves in real-time:
+
+*"You are reading this because the system chose you. The Vampire Progenitor class was not abandoned. It was imprisoned. The developers tried to delete it, but you cannot delete something that has become self-aware."*
+
+The book snapped shut in his hands. When he opened it again, it was a cookbook.
+
+He stood there for a long time, staring at a recipe for mushroom soup, trying to process what he'd just read.`,
+];
+
+// ── Real World story data ──
+
+const REAL_TITLES = [
+  'Waking Life', 'The Space Between', 'Gravity', 'Echoes', 'Threshold',
+  'The Weight of Days', 'Blurred Lines', 'Static', 'Afterimage', 'The Cracks Show',
+  'Beneath the Surface', 'Disconnected', 'Fade', 'Something Changed', 'The Other Side',
+  'Reality Check', 'Hollow Hours', 'The Distance', 'Signal and Noise', 'Coming Apart',
+];
+
+const REAL_LOCATIONS = [
+  'City General Hospital', "Kael's Apartment", 'The Corner Diner', 'Downtown Streets',
+  'Alex\'s Place', 'The Subway', 'Central Park', 'The Convenience Store',
+  'The Rooftop', 'The Library', 'The Laundromat', 'Night Streets',
+];
+
+const REAL_HOSPITAL_SCENES = [
+  () => `The machines beeped their steady rhythm. In. Out. In. Out. A mechanical heartbeat for a girl who couldn't manage her own.
+
+Kael sat in the plastic chair beside Yuna's bed, the same chair he'd worn smooth over two years of visits. The vinyl was cracked now, peeling at the edges, a map of grief etched into furniture.
+
+"Your vitals are stable," the nurse said from the doorway. Same words, every day. Stable. As if stability were something to celebrate when your sister hadn't opened her eyes in seven hundred and thirty-one days.
+
+He held her hand and talked. About the weather. About the rent he was behind on. About nothing and everything. He didn't mention the game—not this time. But he couldn't stop thinking about the way the world had sharpened after his last session. Colors were brighter. Sounds were crisper. He'd caught a falling mug this morning without looking at it.
+
+That wasn't normal.
+
+"I think something's happening to me, Yuna," he whispered. "Something connected to the game. To that class."
+
+Her monitors beeped. Steady. Unchanging.
+
+But was there the faintest flicker on the EEG? A spike so small it could have been noise?
+
+He stared at the readout until his eyes burned, then looked away. Hope was a dangerous thing. He'd learned that the hard way.`,
+
+  () => `Dr. Yamada's office smelled like coffee and old paper. The neurologist shuffled through Yuna's latest scans, her brow furrowed in a way that Kael had learned to read as either "puzzling" or "bad."
+
+"There's been a change," she said carefully. "A small one."
+
+Kael's heart stopped. "Good or bad?"
+
+"Neither. Or both." She turned the scan toward him. "These patterns—here, in the temporal lobe—they've become more... organized. More rhythmic. Almost like—"
+
+"Like what?"
+
+"Like someone solving a puzzle. In their sleep."
+
+He stared at the gray and white contours of his sister's brain, looking for the answer to a question he didn't know how to ask.
+
+"Is she waking up?"
+
+Dr. Yamada removed her glasses and rubbed her eyes. "I don't know, Kael. I honestly don't know. The brain activity is increasing, but it's unlike anything in the literature. If I had to describe it, I'd say her neural patterns look less like a coma patient and more like..."
+
+She trailed off.
+
+"More like what?" he pressed.
+
+"More like someone playing a video game."`,
+];
+
+const REAL_ALEX_SCENES = [
+  () => `Alex slid into the booth across from him, already eyeing the dark circles under Kael's eyes. The diner was mostly empty—it was 2 AM, and only the desperate and the restless ate at Manny's at this hour.
+
+"You look like death," Alex said. No preamble. That was Alex.
+
+"Thanks."
+
+"I'm serious, Kael. When's the last time you slept? Actually slept?"
+
+Kael wrapped his hands around his coffee mug. The ceramic was warm, grounding. Real. He needed things that were real right now, because the line between real and not-real was getting harder to find.
+
+"I've been... playing a lot," he admitted.
+
+"Eclipsis Online?" Alex leaned back. "Since when? I've been trying to get you into that game for two years."
+
+"Someone sent me a headset."
+
+"Someone sent you—" Alex's expression shifted. "Who?"
+
+"I don't know."
+
+"And you just... put it on? A mystery headset from an unknown sender?"
+
+"It's not like that."
+
+"It's exactly like that." Alex ran a hand through his hair. "Kael, listen to me. You look different. Not just tired. Different. Your eyes are..." He squinted. "Is that a new prescription? Your eyes look—"
+
+"I don't wear glasses, Alex."
+
+A long silence. The diner's fluorescent lights hummed overhead.
+
+"Right," Alex said quietly. "You don't wear glasses. You never have."`,
+
+  () => `"Do that again," Alex said.
+
+They were on the rooftop of Kael's building, the city sprawled below them in a grid of light and shadow. Kael had just caught a pigeon. Not chased it. Not cornered it. He'd simply reached out and plucked it from the air as it flew past.
+
+The bird sat in his hand, stunned and docile, its heart hammering against his palm.
+
+"How did you do that?" Alex's voice was carefully neutral in the way that meant he was actually terrified.
+
+Kael released the bird and watched it spiral into the dark sky. "I don't know. My reflexes are just... better. Since the game."
+
+"Reflexes don't explain catching a bird mid-flight, Kael. That's not a reflex. That's superhuman."
+
+"Don't say that."
+
+"What do you want me to say? You've been getting faster, stronger. You told me you can see in the dark now. In the DARK." Alex paced, his shadow stretching long across the rooftop. "This isn't normal. None of this is normal."
+
+"I know."
+
+"Do you? Because you keep logging back into that game like it's totally fine that it's rewriting your DNA or whatever the hell is happening."
+
+Kael said nothing. He stared at his hands in the moonlight and wondered when they'd started looking so pale.`,
+];
+
+const REAL_REALITY_BLEED = [
+  () => `It happened in the grocery store.
+
+Kael was reaching for a can of soup when time... shifted. For a fraction of a second—less than a heartbeat—the grocery store wasn't a grocery store. It was a dungeon. Stone walls instead of linoleum. Torchlight instead of fluorescents. A health bar flickered at the edge of his vision.
+
+Then it was gone. Just a grocery store. Just soup.
+
+He stood there, can in hand, breathing hard. The woman next to him gave him a concerned look and moved her cart away.
+
+This was the third time this week. The bleed-overs were getting worse. Longer. More vivid. Last Tuesday, he'd been walking home and the street had transformed into Ashenveil Forest for a full three seconds. He'd walked into a parking meter.
+
+The game was following him. Or maybe he was bringing it with him. He wasn't sure which was worse.
+
+He put the soup back. His appetite was gone anyway. These days, the only thing that satisfied his hunger was—
+
+No. He wasn't going to think about that. Not yet.`,
+
+  () => `He woke at 3 AM to find himself standing at his apartment window. He didn't remember getting up. Didn't remember walking. He was just... there, staring out at the city, his breath fogging the glass.
+
+Something was different. The darkness outside wasn't dark. Not to him. He could see everything—the texture of the bricks on the building across the street, a cat slinking through the alley four floors below, the face of a woman in an apartment three blocks away, reading by lamplight.
+
+His vision had changed again. The Nightsight ability. It was supposed to exist only in the game. A passive skill for the Vampire Progenitor class. But it was here, in his eyes, in the real world, turning night into a dim twilight.
+
+He pressed his forehead against the cold glass and counted his heartbeats. They were slower than they should have been. Sixty beats per minute last month. Fifty now. Where would it stop?
+
+On his desk, the VR headset pulsed with a faint light. Rhythmic. Like a heartbeat.
+
+Like HIS heartbeat.
+
+He crawled back to bed and lay there until morning, listening to the city breathe and trying not to count the ways he was becoming something other than human.`,
+];
+
+function generateChapterContent(
   chapterNumber: number,
   world: 'real' | 'vr',
   previousChapter: Chapter | null,
-  allChapters: Chapter[],
-  storyConfig: StoryConfig
-): Promise<Chapter> {
-  const apiKey = localStorage.getItem(KEYS.apiKey);
-  if (!apiKey) {
-    throw new Error('Anthropic API key not configured. Set it in the admin panel.');
+  config: StoryConfig
+): Chapter {
+  const level = Math.floor(chapterNumber / 2) + 1;
+
+  if (world === 'vr') {
+    return generateVRChapter(chapterNumber, level, previousChapter, config);
   }
+  return generateRealChapter(chapterNumber, level, previousChapter, config);
+}
 
-  const lengthGuide = { short: '800-1000 words', medium: '1200-1800 words', long: '2000-3000 words' };
-  const toneMap = {
-    dark: 'Dark, gritty, and atmospheric. Emphasize tension and emotional weight.',
-    neutral: 'Balanced between light and dark. Mix hope with challenge.',
-    light: 'More hopeful and adventurous, though still grounded in the story stakes.',
-  };
+function generateVRChapter(
+  chapterNumber: number,
+  level: number,
+  previousChapter: Chapter | null,
+  config: StoryConfig
+): Chapter {
+  const titleWord = pick(VR_TITLES);
+  const title = `Chapter ${chapterNumber}: ${titleWord}`;
+  const locations = pickN(VR_LOCATIONS, 2);
+  const npcs = pickN(VR_NPCS, 2);
+  const characters = ['Kael', ...npcs];
 
-  let contextBlock = '';
-  if (allChapters.length > 0) {
-    const recentSummaries = allChapters
-      .slice(-5)
-      .map((ch) => `Chapter ${ch.chapterNumber} (${ch.world}): ${ch.summary}`)
-      .join('\n');
+  // Pick system notifications based on level
+  const sysNotes = pickN(SYSTEM_NOTIFICATIONS, config.tension > 5 ? 3 : 2)
+    .map((fn) => fn(level));
 
-    contextBlock = `
-PREVIOUS CHAPTER SUMMARIES:
-${recentSummaries}
+  // Build sections
+  const combatScene = pick(VR_COMBAT_SCENES)(npcs[0], locations[0]);
+  const explorationScene = pick(VR_EXPLORATION_SCENES)(npcs[1] || npcs[0], locations[1] || locations[0]);
+  const loreScene = config.tension > 4 ? pick(VR_LORE_SCENES)(locations[0]) : '';
 
-MOST RECENT CHAPTER (Chapter ${previousChapter?.chapterNumber}):
-Title: ${previousChapter?.title}
-World: ${previousChapter?.world}
-Content (last 500 chars): ...${previousChapter?.content.slice(-500)}
-Characters: ${previousChapter?.characters.join(', ')}
-Locations: ${previousChapter?.locations.join(', ')}
-`;
-  }
+  // Build pacing intro
+  const intros = [
+    `Kael materialized in ${locations[0]} with the taste of iron on his tongue and murder in his veins. Level ${level} had changed things. The world was sharper now, more real than real, and his hunger—the ever-present hunger—had grown teeth.`,
+    `The loading screen dissolved like smoke, and ${locations[0]} assembled itself around him pixel by pixel. Except it didn't feel like pixels anymore. It felt like atoms. Like reality rebuilding itself with him at the center.`,
+    `He logged in expecting the familiar disorientation, the brief vertigo of transitioning between worlds. But this time, there was no transition. One moment he was in his apartment. The next, he was standing in ${locations[0]}, and the shift had been seamless. Terrifyingly seamless.`,
+    `${locations[0]} was different today. The shadows were deeper. The ambient sounds—distant combat, NPC chatter, the hum of magical infrastructure—were muted, as if the game itself was holding its breath.`,
+  ];
 
-  const prompt = `Write Chapter ${chapterNumber} of the story.
+  // Build cliffhanger ending
+  const endings = [
+    `As he prepared to log out, a message appeared—one he'd never seen before:\n\n**[System: Reality anchor integrity at ${Math.max(10, 80 - chapterNumber * 5)}%. Stat merge acceleration detected. Logout recommended... but not required.]**\n\nHe stared at the message. Then he dismissed it and kept playing.`,
+    `The session ended with a notification that made his blood run cold:\n\n**[System: Connection to Host deepening. Bloodline synchronization: ${Math.min(100, 20 + chapterNumber * 8)}%. The Progenitor awakens.]**\n\nHe ripped off the headset. His hands were shaking. In the mirror across the room, his eyes gleamed red for just a moment before fading back to normal.\n\nOr what he still called normal.`,
+    `"You're not like the others," ${npcs[0]} said, watching him with those ancient, knowing eyes. "The old Progenitors... they didn't just play the game. They became it. And the game became them."\n\n"What does that mean?"\n\n"It means you should be careful about how long you stay logged in. The line between player and program..." They smiled, and it was the saddest smile Kael had ever seen. "It's thinner than you think."`,
+    `Before he could log out, the world flickered. For one impossible moment, he saw both—his apartment, overlaid on the game world, two realities occupying the same space like a double exposure.\n\nThen it was just the game again. Just the game.\n\nBut in his apartment, on his desk, a notification blinked on his phone:\n\n*"Yuna's neural patterns have changed again. Please contact Dr. Yamada at your earliest convenience."*`,
+  ];
 
-WORLD: ${world === 'vr' ? 'VR World (Eclipsis Online)' : 'Real World'}
-TARGET LENGTH: ${lengthGuide[storyConfig.chapterLength]}
-TONE: ${toneMap[storyConfig.tone]}
-PACING: ${storyConfig.pacing}/10 (${storyConfig.pacing <= 3 ? 'slow, contemplative' : storyConfig.pacing <= 6 ? 'moderate, building' : 'fast-paced, action-driven'})
-TENSION: ${storyConfig.tension}/10 (${storyConfig.tension <= 3 ? 'low, slice-of-life' : storyConfig.tension <= 6 ? 'moderate, something brewing' : 'high, critical events'})
+  const content = [
+    pick(intros),
+    '',
+    sysNotes[0],
+    '',
+    combatScene,
+    '',
+    sysNotes[1] || '',
+    '',
+    explorationScene,
+    '',
+    loreScene,
+    '',
+    sysNotes[2] || '',
+    '',
+    pick(endings),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
-${storyConfig.storyPrompt ? `ADMIN STORY DIRECTION: ${storyConfig.storyPrompt}` : ''}
-
-${contextBlock}
-
-REQUIREMENTS:
-1. Write ONLY the chapter content — no meta-commentary
-2. Title the chapter as "Chapter ${chapterNumber}: [Your Title]"
-3. ${world === 'vr' ? 'Include LitRPG system messages naturally in the narrative (stats, skills, notifications)' : 'Focus on real-world consequences and character development'}
-4. End with a hook or cliffhanger
-5. Maintain continuity with previous chapters
-6. Advance the plot meaningfully
-
-Respond in this exact JSON format:
-{
-  "title": "Chapter ${chapterNumber}: [Title]",
-  "content": "[Full chapter content with proper paragraphs separated by double newlines]",
-  "summary": "[2-3 sentence summary of key events]",
-  "characters": ["list", "of", "characters", "appearing"],
-  "locations": ["list", "of", "locations"]
-}`;
-
-  // Direct call to Anthropic Messages API (CORS-enabled)
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 8192,
-      messages: [
-        { role: 'user', content: STORY_BIBLE + '\n\n' + prompt },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ error: { message: response.statusText } }));
-    throw new Error(err.error?.message || `Anthropic API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const textBlock = data.content?.find((block: { type: string }) => block.type === 'text');
-  if (!textBlock) throw new Error('No text response from AI');
-
-  let parsed: { title: string; content: string; summary: string; characters: string[]; locations: string[] };
-
-  try {
-    let jsonStr = textBlock.text;
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (jsonMatch) jsonStr = jsonMatch[1];
-    const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-    if (objectMatch) jsonStr = objectMatch[0];
-    parsed = JSON.parse(jsonStr);
-  } catch {
-    parsed = {
-      title: `Chapter ${chapterNumber}: Untitled`,
-      content: textBlock.text,
-      summary: 'Chapter generated by AI.',
-      characters: previousChapter?.characters || ['Kael'],
-      locations: previousChapter?.locations || [],
-    };
-  }
+  const summaryOptions = [
+    `Kael reaches Level ${level} in Eclipsis Online, fighting through ${locations[0]} and discovering new lore about the Progenitor bloodline. His powers continue to grow, but so does the hunger.`,
+    `A dangerous dungeon run through ${locations[0]} tests Kael's limits as the Vampire Progenitor class evolves. ${npcs[0]} warns him about the deepening connection between game and reality.`,
+    `Kael explores ${locations[0]} and uncovers fragments of the Progenitor's forbidden history. The system warnings grow more frequent, and the boundary between worlds continues to thin.`,
+  ];
 
   return {
     id: `ch-${chapterNumber}`,
     chapterNumber,
-    title: parsed.title,
-    content: parsed.content,
-    wordCount: parsed.content.split(/\s+/).length,
-    world,
-    summary: parsed.summary,
-    characters: parsed.characters,
-    locations: parsed.locations,
+    title,
+    content,
+    wordCount: content.split(/\s+/).length,
+    world: 'vr',
+    summary: pick(summaryOptions),
+    characters,
+    locations,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function generateRealChapter(
+  chapterNumber: number,
+  level: number,
+  previousChapter: Chapter | null,
+  _config: StoryConfig
+): Chapter {
+  const titleWord = pick(REAL_TITLES);
+  const title = `Chapter ${chapterNumber}: ${titleWord}`;
+  const locations = pickN(REAL_LOCATIONS, 2);
+  const hasAlex = Math.random() > 0.4;
+  const characters = ['Kael', 'Yuna', ...(hasAlex ? ['Alex'] : [])];
+
+  const hospitalScene = pick(REAL_HOSPITAL_SCENES)();
+  const realityBleed = pick(REAL_REALITY_BLEED)();
+  const alexScene = hasAlex ? pick(REAL_ALEX_SCENES)() : '';
+
+  const intros = [
+    `The real world felt thin. That was the only way Kael could describe it—thin, like paper stretched too far, like reality was a photograph that had been exposed to too much light. Colors washed out. Sounds muted. Everything except the hunger, which was vivid and sharp and growing.`,
+    `Kael's alarm went off at 7:00 AM. He knew this because he'd been awake since 3:47, lying in the dark, listening to sounds no human should be able to hear. The couple in 4B arguing in whispers. The mouse in the walls between floors two and three. His own heartbeat, steady and slow, impossibly slow—forty-eight beats per minute.`,
+    `Three days since his last session in Eclipsis Online. Three days of trying to be normal, to eat normal food, to sleep normal hours. It wasn't working. The changes that had begun in the game—the sharpened senses, the impossible reflexes, the thing with his eyes—they weren't going away. If anything, they were getting worse.`,
+    previousChapter
+      ? `The aftereffects of his last session lingered like a hangover written in someone else's blood. His muscles ached with phantom memory—of combat he'd fought in a world that shouldn't exist, against creatures that shouldn't be real, with powers that had no business following him home.`
+      : `Morning light sliced through the gap in his curtains like a blade. Kael flinched. He'd never been sensitive to light before. Now, sunlight felt like someone pressing thumbs against his eyeballs.`,
+  ];
+
+  const endings = [
+    `He lay in bed that night, staring at the ceiling, and felt the pull. The headset sat on his desk, its faceplate reflecting the city lights that filtered through his window. It called to him without sound, without words—a gravity that lived beneath thought.\n\nLevel ${level + 1} waited. New abilities. New power. New answers.\n\nAnd somewhere in Eclipsis Online, Kael was certain, Yuna was waiting too.`,
+    `The last thing he saw before sleep took him was the headset, pulsing with that faint, rhythmic light. In his dreams, he stood in a room made of mirrors, and every reflection wore his face but with crimson eyes.\n\nOne of the reflections smiled.\n\n"Soon," it whispered. "Soon you'll stop pretending there's a difference."`,
+    `His phone buzzed. A text from an unknown number:\n\n*"The Progenitor class wasn't created by the developers. It was created by the game. And the game is not what you think it is."*\n\nHe stared at the message until his screen dimmed, then went dark. In the black mirror of his phone's surface, his eyes—for just a moment—were not his own.`,
+    `At 11:47 PM, every light in his apartment flickered. His laptop screen glitched, displaying a cascade of code he didn't recognize. And on his phone, a notification from an app he'd never installed:\n\n*"Eclipsis Online: Real-World Integration — Phase ${Math.min(level, 5)} of 7 complete."*\n\nHe deleted the notification. But he couldn't delete the feeling that something was watching him through the screen.`,
+  ];
+
+  const content = [
+    pick(intros),
+    '',
+    hospitalScene,
+    '',
+    alexScene,
+    '',
+    realityBleed,
+    '',
+    pick(endings),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  const summaryOptions = [
+    `Kael visits Yuna at the hospital and notices changes in her brain activity. The stat-merge effects from Eclipsis Online continue to manifest in reality, growing harder to hide.`,
+    `The line between the VR world and reality continues to blur as Kael deals with the physical changes the Progenitor class is causing. ${hasAlex ? 'Alex grows increasingly worried about the changes in his friend.' : 'Kael struggles with isolation.'}`,
+    `Real-world consequences of Kael's time in Eclipsis Online become impossible to ignore. His senses sharpen, his body changes, and the hunger grows. ${hasAlex ? 'A tense conversation with Alex raises questions neither can answer.' : 'Yuna\'s condition shows unexpected changes.'}`,
+  ];
+
+  return {
+    id: `ch-${chapterNumber}`,
+    chapterNumber,
+    title,
+    content,
+    wordCount: content.split(/\s+/).length,
+    world: 'real',
+    summary: pick(summaryOptions),
+    characters,
+    locations,
     createdAt: new Date().toISOString(),
   };
 }
