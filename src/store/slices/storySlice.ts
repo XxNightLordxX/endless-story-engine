@@ -1,22 +1,16 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { Chapter, Character, Location, Faction } from '../../types';
+import type { Chapter, ChapterSummary } from '../../api';
 
 interface StoryState {
   currentChapter: Chapter | null;
-  chapters: Chapter[];
-  characters: Character[];
-  locations: Location[];
-  factions: Faction[];
+  chapterList: ChapterSummary[];
   isLoading: boolean;
   error: string | null;
 }
 
 const initialState: StoryState = {
   currentChapter: null,
-  chapters: [],
-  characters: [],
-  locations: [],
-  factions: [],
+  chapterList: [],
   isLoading: false,
   error: null,
 };
@@ -28,32 +22,8 @@ const storySlice = createSlice({
     setCurrentChapter: (state, action: PayloadAction<Chapter | null>) => {
       state.currentChapter = action.payload;
     },
-    setChapters: (state, action: PayloadAction<Chapter[]>) => {
-      state.chapters = action.payload;
-    },
-    addChapter: (state, action: PayloadAction<Chapter>) => {
-      state.chapters.push(action.payload);
-    },
-    setCharacters: (state, action: PayloadAction<Character[]>) => {
-      state.characters = action.payload;
-    },
-    addCharacter: (state, action: PayloadAction<Character>) => {
-      state.characters.push(action.payload);
-    },
-    updateCharacter: (state, action: PayloadAction<{ id: string; updates: Partial<Character> }>) => {
-      const index = state.characters.findIndex(c => c.id === action.payload.id);
-      if (index !== -1) {
-        state.characters[index] = { ...state.characters[index], ...action.payload.updates };
-      }
-    },
-    setLocations: (state, action: PayloadAction<Location[]>) => {
-      state.locations = action.payload;
-    },
-    addLocation: (state, action: PayloadAction<Location>) => {
-      state.locations.push(action.payload);
-    },
-    setFactions: (state, action: PayloadAction<Faction[]>) => {
-      state.factions = action.payload;
+    setChapterList: (state, action: PayloadAction<ChapterSummary[]>) => {
+      state.chapterList = action.payload;
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
@@ -64,18 +34,5 @@ const storySlice = createSlice({
   },
 });
 
-export const {
-  setCurrentChapter,
-  setChapters,
-  addChapter,
-  setCharacters,
-  addCharacter,
-  updateCharacter,
-  setLocations,
-  addLocation,
-  setFactions,
-  setLoading,
-  setError,
-} = storySlice.actions;
-
+export const { setCurrentChapter, setChapterList, setLoading, setError } = storySlice.actions;
 export default storySlice.reducer;
