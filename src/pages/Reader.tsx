@@ -89,6 +89,13 @@ const Reader = () => {
     }
   }, []);
 
+  const currentNum = currentChapter?.chapterNumber || 1;
+  const hasPrev = currentNum > 1;
+  const hasNext = chapterList.some((c) => c.chapterNumber > currentNum);
+
+  const goToPrev = () => { if (hasPrev) navigate(`/read/${currentNum - 1}`); };
+  const goToNext = () => { if (hasNext) navigate(`/read/${currentNum + 1}`); };
+
   // Keyboard nav
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -97,14 +104,7 @@ const Reader = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  });
-
-  const currentNum = currentChapter?.chapterNumber || 1;
-  const hasPrev = currentNum > 1;
-  const hasNext = chapterList.some((c) => c.chapterNumber > currentNum);
-
-  const goToPrev = () => { if (hasPrev) navigate(`/read/${currentNum - 1}`); };
-  const goToNext = () => { if (hasNext) navigate(`/read/${currentNum + 1}`); };
+  }, [currentNum, hasPrev, hasNext, navigate]);
 
   const getWorldColor = () =>
     currentChapter?.world === 'vr'

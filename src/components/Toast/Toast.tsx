@@ -8,13 +8,13 @@ const Toast = () => {
   const { toasts } = useAppSelector((state) => state.ui);
 
   useEffect(() => {
-    toasts.forEach((toast) => {
-      const timer = setTimeout(() => {
+    const timers = toasts.map((toast) =>
+      setTimeout(() => {
         dispatch(removeToast(toast.id));
-      }, toast.duration);
+      }, toast.duration)
+    );
 
-      return () => clearTimeout(timer);
-    });
+    return () => timers.forEach((t) => clearTimeout(t));
   }, [toasts, dispatch]);
 
   const getIcon = (type: string) => {
