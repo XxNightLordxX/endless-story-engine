@@ -1398,6 +1398,78 @@ function advanceArcPhase(arc: StoryArc): StoryArc {
   };
 }
 
+// ─── Intelligent World Selection ─────────────────────────────────────────────
+// Instead of rigid alternation, choose the world that best serves the story.
+// Considers: previous chapters, pacing needs, plot urgency, concealment state,
+// and progression stage to decide where the next chapter should take place.
+
+export function chooseWorld(
+  bible: SeriesBible,
+  previousWorlds: World[],
+): World {
+  const rng = createRng((bible.lastGeneratedChapter + 1) * 577);
+  const last3 = previousWorlds.slice(-3);
+  const ch = bible.lastGeneratedChapter + 1;
+
+  // Hard rule: never 3 in a row in the same world
+  if (last3.length >= 2 && last3.every(w => w === 'vr')) return 'real';
+  if (last3.length >= 2 && last3.every(w => w === 'real')) return 'vr';
+
+  // Score each world based on story needs
+  let vrScore = 50;
+  let realScore = 50;
+
+  // Pacing: action cooldown high → VR needed, emotional cooldown high → real needed
+  vrScore += bible.pacingState.actionCooldown * 8;
+  realScore += bible.pacingState.emotionalCooldown * 8;
+
+  // Concealment pressure: high heat → real world scenes to show pressure
+  if (bible.concealmentState.heatLevel > 50) realScore += 20;
+  if (bible.concealmentState.heatLevel > 70) realScore += 15;
+
+  // Lore cooldown: lore is mostly found in VR
+  vrScore += bible.pacingState.loreCooldown * 5;
+
+  // Revelation cooldown: revelations happen in real world
+  realScore += bible.pacingState.revelationCooldown * 4;
+
+  // Stage-based preferences
+  const stage = bible.mcPsychology.stage;
+  if (stage === 'naive_player') vrScore += 10; // wants to play more
+  if (stage === 'paranoid_hider') realScore += 15; // real-world pressure
+  if (stage === 'strategic_abuser') vrScore += 10; // grinding exploits
+
+  // Plot urgency: check which threads need which world
+  for (const pt of bible.plotThreads.filter(p => p.status === 'active' && p.urgency >= 7)) {
+    if (pt.id === 'plot-save-yuna' || pt.id === 'plot-reality-bleed') realScore += pt.urgency;
+    if (pt.id === 'plot-progenitor-awakening' || pt.id === 'plot-forbidden-history') vrScore += pt.urgency;
+  }
+
+  // Relationship dynamics: high guilt/suspicion → real world
+  for (const rel of bible.relationshipDynamics) {
+    if (rel.guiltLevel > 50 || rel.theirSuspicions.length > 2) realScore += 8;
+  }
+
+  // Close-call deficit: if one world hasn't had a close call in a while, lean toward it
+  if (bible.concealmentState.vrConcealment.chaptersSinceCloseCall > 5) vrScore += 10;
+  if (bible.concealmentState.realConcealment.chaptersSinceCloseCall > 5) realScore += 10;
+
+  // New character/location need → VR (more variety)
+  if (bible.pacingState.chaptersSinceNewCharacter >= 4) vrScore += 10;
+  if (bible.pacingState.chaptersSinceNewLocation >= 4) vrScore += 10;
+
+  // Add randomness to prevent predictability
+  vrScore += rng() * 20;
+  realScore += rng() * 20;
+
+  // Slight preference against repeating last world for variety
+  const lastWorld = previousWorlds[previousWorlds.length - 1];
+  if (lastWorld === 'vr') realScore += 12;
+  if (lastWorld === 'real') vrScore += 12;
+
+  return vrScore >= realScore ? 'vr' : 'real';
+}
+
 // ─── ChapterBlueprint Generation ─────────────────────────────────────────────
 
 const VR_FOCUS_OPTIONS = ['action', 'lore', 'exploration', 'training', 'mystery'] as const;
@@ -1619,6 +1691,23 @@ export function generateBlueprint(
     transferEvent = 'A real-world memory or skill unexpectedly helps in the game';
   }
 
+  // ─── ARC-AWARE TENSION CURVE ────────────────────────────────────────────
+  // Tension follows the arc phase instead of just linear escalation.
+  // Setup: 20-40, Rising: 40-60, Complication: 50-75, Climax: 70-95,
+  // Resolution: 40-60, Aftermath: 20-35
+  const arcTensionRanges: Record<ArcPhase, [number, number]> = {
+    setup: [20, 40], rising: [40, 60], complication: [50, 75],
+    climax: [70, 95], resolution: [40, 60], aftermath: [20, 35],
+  };
+  const [tMin, tMax] = arcTensionRanges[arcPhase] ?? [30, 60];
+  const arcBaseTension = tMin + rng() * (tMax - tMin);
+  // Modify by config tension and concealment heat
+  const configTensionMod = (config.tension - 5) * 3;
+  const heatTensionMod = heatLevel > 50 ? (heatLevel - 50) * 0.2 : 0;
+  const tensionTarget = Math.min(100, Math.max(10, Math.round(
+    arcBaseTension + configTensionMod + heatTensionMod
+  )));
+
   return {
     chapterNumber,
     world,
@@ -1630,7 +1719,7 @@ export function generateBlueprint(
     charactersToInclude,
     locationsToUse,
     emotionalTarget: pick(EMOTIONAL_TARGETS, rng),
-    tensionTarget: Math.min(100, bible.pacingState.tensionLevel + (config.tension > 5 ? 5 : -3)),
+    tensionTarget,
     wordTarget: 2000,
     mustAdvancePlots,
     foreshadowingToPlant: toPlant,
@@ -1835,6 +1924,77 @@ export function updateSeriesBible(
   // Keep only last 30 entries to prevent unbounded growth
   if (updated.usedSceneKeys.length > 30) {
     updated.usedSceneKeys = updated.usedSceneKeys.slice(-30);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MINOR ARC MANAGEMENT — spawn, advance, and resolve minor story arcs
+  // These create smaller narrative loops within the larger story, preventing
+  // the feeling of one monolithic plotline.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Spawn a new minor arc every 5-8 chapters if we have fewer than 2 active
+  const activeMinorArcs = ps.activeMinorArcs.filter(a => a.phase !== 'aftermath');
+  if (activeMinorArcs.length < 2 && ch > 3 && (ch - (activeMinorArcs[activeMinorArcs.length - 1]?.startChapter ?? 0)) >= 5) {
+    const minorArcTemplates = [
+      { title: 'The Shadow Follower', desc: 'A mysterious figure seems to be following Kael across both worlds', type: 'mystery' as const, beats: 6 },
+      { title: 'The Glitch Hunter', desc: 'Another player is cataloguing game anomalies and getting too close to the truth', type: 'minor' as const, beats: 5 },
+      { title: 'Yuna\'s Whisper', desc: 'Kael begins hearing faint whispers that sound like Yuna during gameplay', type: 'personal' as const, beats: 4 },
+      { title: 'The Rival Progenitor', desc: 'Signs of another Progenitor-class player emerge in Eclipsis', type: 'major' as const, beats: 8 },
+      { title: 'Alex\'s Investigation', desc: 'Alex begins independently researching the effects of VR on the brain', type: 'personal' as const, beats: 5 },
+      { title: 'The Sealed Floor', desc: 'A new dungeon level appears that only Kael can access, hiding dark secrets', type: 'mystery' as const, beats: 6 },
+      { title: 'The Blood Debt', desc: 'Using Progenitor powers has a hidden cost that is slowly coming due', type: 'major' as const, beats: 7 },
+      { title: 'The Developer\'s Message', desc: 'An ex-developer of Eclipsis Online reaches out with a cryptic warning', type: 'mystery' as const, beats: 5 },
+    ];
+    // Pick one not already active
+    const usedTitles = new Set(ps.activeMinorArcs.map(a => a.title));
+    const available = minorArcTemplates.filter(t => !usedTitles.has(t.title));
+    if (available.length > 0) {
+      const template = pick(available, rng);
+      ps.activeMinorArcs.push({
+        id: `arc-minor-${ch}-${template.title.toLowerCase().replace(/\s+/g, '-')}`,
+        title: template.title,
+        phase: 'setup',
+        type: template.type,
+        startChapter: ch,
+        estimatedLength: template.beats * 2,
+        currentBeat: 1,
+        totalBeats: template.beats,
+        description: template.desc,
+        stakes: template.desc,
+        involvedCharacters: ['kael'],
+      });
+
+      // Add corresponding plot thread
+      updated.plotThreads.push({
+        id: `plot-minor-${ch}`,
+        title: template.title,
+        description: template.desc,
+        type: template.type === 'mystery' ? 'mystery' : template.type === 'personal' ? 'personal' : 'minor',
+        status: 'active',
+        startedChapter: ch,
+        resolvedChapter: null,
+        involvedCharacters: ['kael'],
+        stakes: template.desc,
+        currentProgress: 'Just beginning',
+        nextBeat: `First sign of ${template.title.toLowerCase()}`,
+        urgency: 4,
+      });
+    }
+  }
+
+  // Advance active minor arcs
+  for (const arc of ps.activeMinorArcs) {
+    if (arc.phase === 'aftermath') continue;
+    arc.currentBeat++;
+    const advancedArc = advanceArcPhase(arc);
+    arc.phase = advancedArc.phase;
+    arc.currentBeat = advancedArc.currentBeat;
+  }
+
+  // Clean up completed minor arcs (keep last 3 for reference)
+  const completedMinorArcs = ps.activeMinorArcs.filter(a => a.phase === 'aftermath' && a.currentBeat > a.totalBeats + 2);
+  if (completedMinorArcs.length > 3) {
+    ps.activeMinorArcs = ps.activeMinorArcs.filter(a => !completedMinorArcs.slice(0, completedMinorArcs.length - 3).includes(a));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

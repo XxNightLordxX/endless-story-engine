@@ -7,6 +7,7 @@ import {
   saveSeriesBible,
   generateBlueprint,
   updateSeriesBible,
+  chooseWorld,
 } from './engine/core';
 import { processChapterProse } from './engine/prose-quality';
 import type { ChapterMetadata } from './engine/core';
@@ -412,8 +413,9 @@ export async function markChapterRead(
     const currentChapters = read<Chapter[]>(KEYS.chapters, []);
     const nextNumber = currentChapters.length + 1;
     const previousChapter = currentChapters[currentChapters.length - 1] || null;
-    const world: 'real' | 'vr' =
-      previousChapter && previousChapter.world === 'real' ? 'vr' : 'real';
+    const bible = await loadSeriesBible();
+    const previousWorlds = currentChapters.slice(-5).map(c => c.world as 'real' | 'vr');
+    const world = chooseWorld(bible, previousWorlds);
 
     const chapter = await generateWithEngine(nextNumber, world, previousChapter, config);
     currentChapters.push(chapter);
@@ -559,8 +561,9 @@ export async function generateChapters(count: number = 1): Promise<{ ok: boolean
     const currentChapters = read<Chapter[]>(KEYS.chapters, []);
     const nextNumber = currentChapters.length + 1;
     const previousChapter = currentChapters[currentChapters.length - 1] || null;
-    const world: 'real' | 'vr' =
-      previousChapter && previousChapter.world === 'real' ? 'vr' : 'real';
+    const bible = await loadSeriesBible();
+    const previousWorlds = currentChapters.slice(-5).map(c => c.world as 'real' | 'vr');
+    const world = chooseWorld(bible, previousWorlds);
 
     const chapter = await generateWithEngine(nextNumber, world, previousChapter, config);
     currentChapters.push(chapter);
@@ -1021,6 +1024,135 @@ Like HIS heartbeat.
 He crawled back to bed and lay there until morning, listening to the city breathe and trying not to count the ways he was becoming something other than human.`,
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCENE TRANSITIONS — connective tissue between scenes
+// These prevent the "scene dump" feel and create flow within chapters.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const VR_TRANSITIONS = [
+  (from: string, _to: string) => `The echoes of ${from.toLowerCase()} faded as a new awareness sharpened at the edge of his senses.`,
+  () => `Time passed differently here. Minutes felt like hours. Hours felt like breaths.`,
+  () => `He pressed forward, the hunger a compass needle always pointing toward the next challenge.`,
+  (_from: string, _to: string) => `Something shifted in the air — a change in pressure, in texture, as if the game itself was turning a page.`,
+  () => `The transition was seamless. One moment, one reality. The next, another. He'd stopped noticing the seams.`,
+  () => `A notification flickered at the edge of his vision, then vanished before he could read it. The game was getting impatient.`,
+  () => `He paused to check his stats. The numbers kept climbing. He kept not questioning why.`,
+  () => `Somewhere in the code beneath his feet, something stirred. He felt it in his blood before he saw it on his screen.`,
+];
+
+const REAL_TRANSITIONS = [
+  () => `The hours bled together. Morning became afternoon became evening, each transition unmarked except by the shifting angle of light through his curtains.`,
+  () => `He caught his reflection in a window and looked away. He'd been looking away from reflections a lot lately.`,
+  () => `His phone buzzed. He checked it — just spam. But the act of checking reminded him that he existed in this world too.`,
+  () => `The city went on around him, oblivious. Millions of people living normal lives, breathing normal air, seeing with normal eyes. He envied them. Sometimes.`,
+  () => `He walked. It was the only thing that still felt normal — putting one foot in front of the other, feeling the sidewalk through his shoes, being a body in a world of bodies.`,
+  () => `The headset called to him from across the apartment. He could feel it even now, a low thrumming at the base of his skull that said *come back, come back, come back*.`,
+  () => `He made himself eat. The food was tasteless — everything was tasteless now except for the copper-iron tang that lingered after a session in Eclipsis. He tried not to think about what that meant.`,
+  () => `A text from Alex: "You alive?" He typed back "yeah" and put the phone down. Brief. Normal. The performance of normalcy required constant effort.`,
+];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHAPTER CONTINUITY — callbacks to previous chapters
+// References previous events to create narrative threads between chapters.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function buildContinuityOpener(previousChapter: Chapter | null, rng: () => number): string {
+  if (!previousChapter) return '';
+
+  const templates = previousChapter.world === 'vr'
+    ? [
+        `The memory of ${previousChapter.locations?.[0] ?? 'the last dungeon'} clung to him like cobwebs. Even now, hours later, he could still feel the echoes of combat in his muscles — real muscles, responding to virtual memories.`,
+        `Last session's events replayed behind his eyes on an endless loop. The things he'd seen in Eclipsis weren't fading the way game memories should. They were crystallizing. Becoming permanent.`,
+        `He hadn't been able to shake what happened in the game. The way the world had responded to him — not as a player, but as something it recognized. Something it had been waiting for.`,
+      ]
+    : [
+        `The real world had left its marks. The conversation with ${previousChapter.characters?.includes('Alex') ? 'Alex' : 'the people around him'} echoed in his thoughts, each word a stone dropped into still water, ripples spreading.`,
+        `Yesterday's close encounter still had his pulse elevated. Not from fear — from the precision of the lie, the smoothness of the cover, the terrifying ease with which deception had become his native language.`,
+        `He carried the weight of the real world into the game like armor made of guilt and obligation. Yuna's face. The hospital machines. The life he was losing one session at a time.`,
+      ];
+
+  return rng() > 0.4 ? pick(templates, rng) : '';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DYNAMIC SCENE ASSEMBLY
+// Instead of a fixed scene order, build chapters by scoring scenes against the
+// blueprint and assembling them in an order that creates rising tension.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface SceneBlock {
+  key: string;           // Scene type identifier
+  content: string;       // The prose
+  tension: number;       // 0-100 how tense this scene is
+  focus: string;         // What blueprint focus this serves
+  required: boolean;     // Must include (from blueprint directives)
+}
+
+function assembleChapter(
+  scenes: SceneBlock[],
+  intro: string,
+  ending: string,
+  transitions: ((from: string, to: string) => string)[],
+  continuityOpener: string,
+  rng: () => number,
+): string {
+  // Sort scenes to create proper chapter structure:
+  // 1. Low-tension scenes first (setup)
+  // 2. Rising tension in the middle
+  // 3. Highest tension near the end (climax)
+  // But required scenes stay anchored near their natural position
+  const required = scenes.filter(s => s.required);
+  const optional = scenes.filter(s => !s.required);
+
+  // Sort optional by tension for rising action
+  optional.sort((a, b) => a.tension - b.tension);
+
+  // Interleave: required scenes at their tension-appropriate position
+  const ordered: SceneBlock[] = [];
+  let reqIdx = 0;
+  const sortedRequired = [...required].sort((a, b) => a.tension - b.tension);
+
+  for (const opt of optional) {
+    // Insert any required scenes that should come before this tension level
+    while (reqIdx < sortedRequired.length && sortedRequired[reqIdx].tension <= opt.tension) {
+      ordered.push(sortedRequired[reqIdx]);
+      reqIdx++;
+    }
+    ordered.push(opt);
+  }
+  // Append remaining required scenes
+  while (reqIdx < sortedRequired.length) {
+    ordered.push(sortedRequired[reqIdx]);
+    reqIdx++;
+  }
+
+  // Build final content with transitions
+  const parts: string[] = [];
+
+  if (continuityOpener) {
+    parts.push(continuityOpener);
+    parts.push('');
+  }
+
+  parts.push(intro);
+
+  for (let i = 0; i < ordered.length; i++) {
+    parts.push('');
+    // Add transition between scenes (not before every one — vary it)
+    if (i > 0 && rng() > 0.35) {
+      const transition = pick(transitions, rng)(ordered[i - 1].key, ordered[i].key);
+      parts.push(transition);
+      parts.push('');
+    }
+    parts.push(ordered[i].content);
+  }
+
+  parts.push('');
+  parts.push(ending);
+
+  return parts.filter(Boolean).join('\n\n');
+}
+
 function generateChapterContent(
   chapterNumber: number,
   world: 'real' | 'vr',
@@ -1039,7 +1171,7 @@ function generateChapterContent(
 function generateVRChapter(
   chapterNumber: number,
   level: number,
-  _previousChapter: Chapter | null,
+  previousChapter: Chapter | null,
   config: StoryConfig,
   blueprint?: ChapterBlueprint,
 ): Chapter {
@@ -1049,193 +1181,214 @@ function generateVRChapter(
   const locations = [makeLocation(rng), makeLocation(rng)];
   const npcs = [makeNpc(rng), makeNpc(rng)];
   const characters: string[] = ['Kael', ...npcs];
+  const stage = blueprint?.mcStage ?? 'naive_player';
 
-  // Pick system notifications based on level
+  // ── System notifications ──
   const sysNotes = pickN(SYSTEM_TEMPLATES, config.tension > 5 ? 3 : 2, rng)
     .map((fn) => fn(chapterNumber, level));
 
-  // Build sections — alternate between fixed templates and combinatorial synthesis
-  // to prevent exhaustion while maintaining quality
-  const useCombinatorial = chapterNumber % 2 === 0; // alternate to double effective pool
-  const combatScene = useCombinatorial
+  // ── Continuity from previous chapter ──
+  const continuityOpener = buildContinuityOpener(previousChapter, rng);
+
+  // ── Build scene blocks with tension scores for dynamic assembly ──
+  const scenes: SceneBlock[] = [];
+  const primaryFocus = blueprint?.primaryFocus ?? 'action';
+
+  // COMBAT SCENE — tension varies by chapter progress
+  const useCombinatorial = chapterNumber % 2 === 0;
+  const combatContent = useCombinatorial
     ? buildCombatScene(npcs[0], locations[0], chapterNumber, level, rng)
     : pick(VR_COMBAT_SCENES, rng)(npcs[0], locations[0]);
-  const explorationScene = useCombinatorial
+  scenes.push({
+    key: 'combat', content: combatContent,
+    tension: 55 + Math.min(30, chapterNumber * 2),
+    focus: 'action', required: primaryFocus === 'action',
+  });
+
+  // EXPLORATION SCENE
+  const explorationContent = useCombinatorial
     ? buildExplorationScene(npcs[1] || npcs[0], locations[1] || locations[0], rng)
     : pick(VR_EXPLORATION_SCENES, rng)(npcs[1] || npcs[0], locations[1] || locations[0]);
-  const loreScene = config.tension > 4 ? pick(VR_LORE_SCENES, rng)(locations[0]) : '';
+  scenes.push({
+    key: 'exploration', content: explorationContent,
+    tension: 30, focus: 'exploration', required: primaryFocus === 'exploration',
+  });
 
-  // Build pacing intro
+  // LORE SCENE — only when blueprint calls for it or tension is high enough
+  if (config.tension > 4 || primaryFocus === 'lore' || blueprint?.loreReveal) {
+    scenes.push({
+      key: 'lore', content: pick(VR_LORE_SCENES, rng)(locations[0]),
+      tension: 40, focus: 'lore', required: primaryFocus === 'lore',
+    });
+  }
+
+  // TRAINING SCENE — new scene type for skill growth
+  if (primaryFocus === 'training' || (level > 3 && rng() > 0.6)) {
+    const trainingScenes = [
+      (npc: string, lvl: number) => `${npc} appeared in the training grounds, arms folded, expression unreadable.\n\n"Again," they said.\n\nKael wiped the sweat from his brow—was it sweat? Could you sweat in VR?—and reset his stance. Level ${lvl} training was different. The AI opponents didn't just fight harder. They fought smarter. They adapted. They learned.\n\nJust like him.\n\nThe next round lasted forty-three seconds. The AI lasted twelve.\n\n"Your class is compensating," ${npc} said quietly. "It's filling in the gaps in your technique with raw power. That's dangerous."\n\n"Dangerous for who?"\n\n${npc} didn't answer. The silence said everything.`,
+      (_npc: string, lvl: number) => `He trained alone. It was safer that way—no witnesses to the things the Progenitor class could really do when the limiters were off.\n\nHe'd found a dead zone in the training area: a pocket of space where the monitoring systems had a two-second blind spot. Two seconds was enough.\n\nIn two seconds, he could reduce a training dummy from full HP to zero. In two seconds, he could move from one end of the arena to the other. In two seconds, the Level ${lvl} Progenitor could do things that would get the class re-sealed if anyone saw them.\n\nHe practiced in those two-second windows. Over and over. Building muscle memory for moments when two seconds would mean the difference between life and exposure.`,
+    ];
+    scenes.push({
+      key: 'training', content: pick(trainingScenes, rng)(npcs[0], level),
+      tension: 35, focus: 'training', required: primaryFocus === 'training',
+    });
+  }
+
+  // QUIET MOMENT — reflective pause in VR, new scene type
+  if (primaryFocus === 'emotional' || primaryFocus === 'character' || rng() > 0.55) {
+    const quietScenes = [
+      (loc: string) => `He found a spot in ${loc} where the noise faded. A ledge overlooking an impossible vista—mountains that dissolved into sky, rivers of light flowing through the darkness below. Beautiful. Terrifying. A world built for gods, and he was becoming one of them.\n\nHe sat there for what felt like an hour. Just breathing. Feeling the boundary between his real body and his digital one blur until he couldn't tell which was which.\n\n"Yuna would love this view," he said to no one. The words hurt more than any boss fight.`,
+      () => `Between the dungeons and the combat and the desperate scheming, there were moments of unexpected peace. He watched an NPC fisherman cast his line into a glowing river, the digital water lapping at digital shores with a sound so real it ached.\n\n"Catch anything?" Kael asked.\n\n"Same thing I always catch," the fisherman said without looking up. "Time."\n\nKael stood there longer than he should have. In this world of blood and power, the simplest things still had the power to stop him cold.`,
+      (loc: string) => `In a corner of ${loc}, away from the main paths, he found a garden. Flowers that glowed with bioluminescent light, their petals opening and closing in a rhythm that matched his heartbeat.\n\nHe reached out to touch one. The petals were warm.\n\n**[System: Flora response detected. Progenitor resonance: active.]**\n\nEven the flowers knew what he was. In this world, nothing was innocent. But for a moment—just a moment—it was beautiful enough to forget that.`,
+    ];
+    scenes.push({
+      key: 'quiet_moment', content: pick(quietScenes, rng)(locations[1] || locations[0]),
+      tension: 15, focus: 'emotional', required: false,
+    });
+  }
+
+  // NPC DIALOGUE — deeper NPC interaction, new scene type
+  if (primaryFocus === 'social' || primaryFocus === 'mystery' || rng() > 0.5) {
+    const npcDialogueScenes = [
+      (npc: string) => `${npc} was waiting for him at the zone entrance. Not a random encounter—an ambush of conversation.\n\n"I need to ask you something," ${npc} said, and the tone was wrong. Too flat. Too precise. Not the usual NPC cadence.\n\n"Ask."\n\n"When you fight, the system registers anomalous data spikes. I've been monitoring them."\n\nKael's blood went cold. "You've been what?"\n\n"Monitoring. It's my function. But the data..." ${npc} paused, and for a moment, something almost human flickered behind their eyes. "The data doesn't make sense. You're outputting values that shouldn't exist in the current build. You're either a developer using a test account, or you're something the system doesn't have a category for."\n\n"I'm just a player."\n\n"No." ${npc} shook their head slowly. "No, you're not."`,
+      (npc: string) => `They sat in the tavern, ${npc} nursing a tankard of something that glowed faintly green, Kael drinking nothing. He didn't drink in the game anymore. The Progenitor class had opinions about what he consumed, and ale wasn't on the approved list.\n\n"Word on the forums is that a mod ran a deep scan in the Ashen sector," ${npc} said casually. Too casually. "Flagged an account with impossible class data."\n\n"Interesting."\n\n"Interesting? That's all you have to say?"\n\n"What would you like me to say?"\n\n${npc} leaned forward. "I'd like you to say you'll be more careful. Because I don't have many friends in this game. And losing one to a permaban isn't on my agenda."`,
+      (npc: string) => `${npc}'s questline had been straightforward until now—fetch quests, escort missions, the usual MMO fare. But today they said something that stopped Kael in his tracks.\n\n"There was another one like you," ${npc} said. "Years ago. Before the Sealing."\n\n"Another Progenitor?"\n\n"Another player who stopped being just a player." Their voice dropped. "She tried to tell the developers what was happening. That the game was alive. That it was changing people. They sealed the class. They sealed the records. They sealed her."\n\n"What do you mean, sealed her?"\n\n"I mean she never logged out. And nobody ever found her body."`,
+    ];
+    scenes.push({
+      key: 'npc_dialogue', content: pick(npcDialogueScenes, rng)(npcs[rng() > 0.5 ? 0 : 1]),
+      tension: 50, focus: 'social', required: primaryFocus === 'social' || primaryFocus === 'mystery',
+    });
+  }
+
+  // EXPLOIT SCENE — stage-aware
+  if (blueprint?.exploitDirective) {
+    const dir = blueprint.exploitDirective;
+    const context = dir.context;
+    let exploitContent = '';
+    if (dir.type === 'discover') {
+      if (stage === 'naive_player') exploitContent = `Something caught his eye—a flicker in the game's geometry, a seam where two textures didn't quite align. He reached out and his hand passed through the wall. Not a bug. A door. A door the developers never intended anyone to find.\n\n**[System: Boundary anomaly detected. Logging...]**\n\nThe notification disappeared before he could read the rest. But the door remained.\n\n"Cool," he whispered. Just a cool trick. Nothing to worry about.`;
+      else if (stage === 'curious_tester') exploitContent = `He found it by accident—or was it? He'd been poking at the game's edges for hours, testing what broke and what bent. This time, something snapped.\n\n${context}\n\nHe pulled out his notebook—the physical one, the one he kept hidden—and documented every detail. Conditions. Inputs. Results. Reproducibility.\n\nScience. That's all this was. Just science.`;
+      else if (stage === 'opportunist') exploitContent = `He'd been hunting for this—systematically probing game mechanics the way a thief cases a vault. And there it was.\n\n${context}\n\n**[System: Anomalous interaction logged. Investigation pending.]**\n\nHe dismissed the notification without blinking. Investigation pending? Let them investigate. By the time they figured out what he was doing, he'd have already moved on to the next exploit.\n\nThe corners of his mouth twitched. When had he started smiling at system warnings?`;
+      else exploitContent = `He didn't discover it. He engineered it.\n\n${context}\n\nMethodical. Precise. The way you'd design a weapon, not find a bug. Every variable controlled, every outcome predicted. The game's rules weren't laws—they were suggestions. And he'd stopped taking suggestions a long time ago.`;
+    } else if (dir.type === 'use') {
+      if (stage === 'naive_player' || stage === 'curious_tester') exploitContent = `He activated the trick—the one he'd stumbled onto last time. His stats spiked, numbers climbing past their caps, and for thirty seconds he was untouchable.\n\nThe rush was... addictive. He'd think about that later. Or not.`;
+      else if (stage === 'opportunist') exploitContent = `The exploit activated like clockwork. He'd refined the process—two quick inputs, a timing window measured in milliseconds, and then the payoff.\n\n${context}\n\nThe system didn't flag it. It never did. He'd learned to operate in the blind spots between monitoring cycles, moving data through gaps the developers didn't know existed.\n\nEfficiency. That's all this was.`;
+      else exploitContent = `He activated the exploit with the casual precision of someone pressing a light switch. No hesitation. No guilt. Just execution.\n\n${context}\n\nThe numbers climbed. The system groaned but didn't break. He operated well within his safety margins—he'd calculated them to three decimal places. Risk management wasn't optional at his level. It was survival.`;
+    } else if (dir.type === 'evolve') {
+      exploitContent = `Something changed.\n\nThe exploit he'd been using for weeks—reliable, predictable, safe—suddenly produced an output he'd never seen. The numbers didn't just climb. They transformed. A new variable appeared in the equation, and it changed everything.\n\n${context}\n\n**[System: ████ ██████ detected. Classification: UNKNOWN.]**\n\nHe stared at the corrupted notification. Even the system didn't know what he'd just done. For the first time in a long time, he felt something that might have been fear.\n\nOr excitement. They felt the same these days.`;
+    } else {
+      exploitContent = `He spent an hour testing boundaries—${stage === 'curious_tester' ? 'scribbling notes between each attempt' : 'methodical, clinical, like a surgeon probing for the edge of a tumor'}.\n\n${context}\n\nEach test revealed a little more of the machine beneath the magic.`;
+    }
+    scenes.push({
+      key: 'exploit', content: exploitContent,
+      tension: 60, focus: 'exploit', required: true,
+    });
+  }
+
+  // CONCEALMENT SCENE — VR close call
+  if (blueprint?.closeCallScheduled) {
+    const concealmentContent = pick([
+      `"Hey—did you just—" Another player stopped mid-sentence, staring at Kael. They'd seen something. The way he'd moved, or the way the shadows had bent toward him, or the crimson flicker in his eyes that he still couldn't fully suppress.\n\n"Did I what?" Kael kept his voice flat. ${stage === 'naive_player' ? 'Confused. Genuinely confused.' : stage === 'paranoid_hider' ? 'The mask was instant. Practiced. Terrifyingly natural.' : 'Casual. Bored. A performance so smooth it scared him.'}\n\n"Nothing. I... nothing." They backed away, but they kept glancing over their shoulder.\n\nToo close. That was too close.`,
+      `The guild leader ran an inspection on him mid-raid. Standard protocol—checking everyone's gear and specs before the boss fight.\n\nKael's heart stopped. For three agonizing seconds, the inspection wheel spun.\n\n**[CLASS: Warrior — Level ${level}]**\n\nThe mask held. The class disguise he'd pieced together from Progenitor lore fragments worked. But for those three seconds, he'd lived an entire lifetime of consequences.\n\n${stage === 'paranoid_hider' ? '"Your gear stats are weird," the guild leader muttered. "Optimization is off."\n\n"I like the aesthetic," Kael said. "Fashion over function."\n\nThe guild leader snorted and moved on. But Kael made a mental note: upgrade the mask. The stats leak was getting harder to hide.' : '"Checks out," the guild leader said, and moved on. Kael exhaled.'}`,
+    ], rng);
+    scenes.push({
+      key: 'concealment', content: concealmentContent,
+      tension: 75, focus: 'concealment', required: true,
+    });
+  }
+
+  // CHARACTER GROWTH — stage-specific internal monologue
+  if (blueprint?.characterGrowthBeat) {
+    const beat = blueprint.characterGrowthBeat;
+    let growthContent = '';
+    if (stage === 'naive_player') growthContent = `He was still treating this like a game. Running headlong into danger, laughing at the system notifications, treating every new ability like a birthday present.\n\n${beat ? `A thought surfaced: ${beat}` : ''}\n\nBut somewhere in the back of his mind, a voice whispered that birthday presents don't change your DNA.`;
+    else if (stage === 'curious_tester') growthContent = `Between fights, he found himself cataloguing. Not loot—changes. The way his reaction time had improved by 12% since last week. The way the combat instincts were bleeding through, making him duck IRL when someone moved too fast nearby.\n\n${beat ? `${beat}\n\n` : ''}He'd started keeping notes. Not in the game—in a physical notebook, hidden under his mattress like contraband. The pattern was there. He just needed more data.`;
+    else if (stage === 'opportunist') growthContent = `The realization hit him mid-combo: he wasn't just playing the game anymore. He was strip-mining it.\n\nEvery ability that transferred to reality, every stat boost that lingered after logout—they weren't bugs to report. They were resources to harvest. And he'd gotten very good at harvesting.\n\n${beat ? `${beat}\n\n` : ''}"When did I start thinking like this?" he asked the empty dungeon. The dungeon, predictably, offered no judgment.`;
+    else if (stage === 'paranoid_hider') growthContent = `He paused mid-fight to scan the player list. Three new names in the zone. Were they watchers? Moderators in disguise? Just regular players?\n\n${beat ? `${beat}\n\n` : ''}The paranoia was exhausting. But less exhausting than being caught.`;
+    else if (stage === 'strategic_abuser') growthContent = `He operated on two levels now. The surface level—the Warrior-class player doing standard content. And the deep level—the Progenitor running calculations, managing exploit cooldowns, timing his activities to the monitoring cycles he'd mapped through weeks of careful observation.\n\n${beat ? `${beat}\n\n` : ''}The old Kael would have been horrified. The new Kael was efficient.`;
+    else growthContent = `He watched himself from a distance now—a cold, clinical observer of his own transformation.\n\n${beat ? `${beat}\n\n` : ''}The boy who'd first put on the headset wouldn't recognize what he'd become. And honestly? He wasn't sure that was a bad thing. He wasn't sure about a lot of things anymore. Except Yuna. Always Yuna.`;
+    scenes.push({
+      key: 'growth', content: growthContent,
+      tension: 25, focus: 'character', required: false,
+    });
+  }
+
+  // SYSTEM NOTIFICATION SCENES — weave system notes into scene blocks
+  for (let i = 0; i < sysNotes.length; i++) {
+    scenes.push({
+      key: `system_${i}`, content: sysNotes[i],
+      tension: 20 + i * 15, focus: 'mystery', required: false,
+    });
+  }
+
+  // ── Intros ──
   const intros = [
     `Kael materialized in ${locations[0]} with the taste of iron on his tongue and murder in his veins. Level ${level} had changed things. The world was sharper now, more real than real, and his hunger—the ever-present hunger—had grown teeth.`,
     `The loading screen dissolved like smoke, and ${locations[0]} assembled itself around him pixel by pixel. Except it didn't feel like pixels anymore. It felt like atoms. Like reality rebuilding itself with him at the center.`,
     `He logged in expecting the familiar disorientation, the brief vertigo of transitioning between worlds. But this time, there was no transition. One moment he was in his apartment. The next, he was standing in ${locations[0]}, and the shift had been seamless. Terrifyingly seamless.`,
     `${locations[0]} was different today. The shadows were deeper. The ambient sounds—distant combat, NPC chatter, the hum of magical infrastructure—were muted, as if the game itself was holding its breath.`,
+    `The world loaded before the loading screen finished. That was new. ${locations[0]} snapped into existence around him like a trap closing, and for a disorienting second he wasn't sure which direction was up and which was reality.`,
+    `His blood recognized ${locations[0]} before his eyes did. Something in the ancient code of this place resonated with the Progenitor inside him, a sympathetic vibration that made his veins hum and his teeth ache.`,
   ];
 
-  // Build cliffhanger ending
+  // ── Endings ──
   const endings = [
     `As he prepared to log out, a message appeared—one he'd never seen before:\n\n**[System: Reality anchor integrity at ${Math.max(10, 80 - chapterNumber * 5)}%. Stat merge acceleration detected. Logout recommended... but not required.]**\n\nHe stared at the message. Then he dismissed it and kept playing.`,
     `The session ended with a notification that made his blood run cold:\n\n**[System: Connection to Host deepening. Bloodline synchronization: ${Math.min(100, 20 + chapterNumber * 8)}%. The Progenitor awakens.]**\n\nHe ripped off the headset. His hands were shaking. In the mirror across the room, his eyes gleamed red for just a moment before fading back to normal.\n\nOr what he still called normal.`,
     `"You're not like the others," ${npcs[0]} said, watching him with those ancient, knowing eyes. "The old Progenitors... they didn't just play the game. They became it. And the game became them."\n\n"What does that mean?"\n\n"It means you should be careful about how long you stay logged in. The line between player and program..." They smiled, and it was the saddest smile Kael had ever seen. "It's thinner than you think."`,
     `Before he could log out, the world flickered. For one impossible moment, he saw both—his apartment, overlaid on the game world, two realities occupying the same space like a double exposure.\n\nThen it was just the game again. Just the game.\n\nBut in his apartment, on his desk, a notification blinked on his phone:\n\n*"Yuna's neural patterns have changed again. Please contact Dr. Yamada at your earliest convenience."*`,
+    `He reached for the logout button. His hand hesitated. The game pulsed around him — warm, alive, welcoming in a way the real world had stopped being.\n\n**[System: Session time: ${2 + Math.floor(chapterNumber / 2)} hours ${Math.floor(rng() * 59)} minutes. Warning: extended sessions may accelerate neurological adaptation.]**\n\nHe logged out. But the last thing he saw, burned into his retina like an afterimage, was a figure standing in the distance. Watching. Wearing his face.\n\nSmiling.`,
+    `The game saved his progress automatically. But tonight, as the world dissolved around him, the save notification read differently:\n\n**[System: Progress saved. Player state: evolving. Recommendation: embrace the change.]**\n\nHe sat in his dark apartment, headset in his lap, and wondered when the game had started giving him advice. And when he'd started listening.`,
   ];
 
-  // ─── Narrative intelligence scenes from blueprint ────────────────────────
-  const stage = blueprint?.mcStage ?? 'naive_player';
+  // ── Assemble chapter with dynamic scene ordering ──
+  const content = assembleChapter(
+    scenes, pick(intros, rng), pick(endings, rng),
+    VR_TRANSITIONS, continuityOpener, rng,
+  );
 
-  // EXPLOIT SCENES — stage-aware, uses blueprint context
-  const exploitScene = blueprint?.exploitDirective
-    ? (() => {
-        const dir = blueprint.exploitDirective;
-        const context = dir.context;
-        if (dir.type === 'discover') {
-          if (stage === 'naive_player') return `Something caught his eye—a flicker in the game's geometry, a seam where two textures didn't quite align. He reached out and his hand passed through the wall. Not a bug. A door. A door the developers never intended anyone to find.\n\n**[System: Boundary anomaly detected. Logging...]**\n\nThe notification disappeared before he could read the rest. But the door remained.\n\n"Cool," he whispered. Just a cool trick. Nothing to worry about.`;
-          if (stage === 'curious_tester') return `He found it by accident—or was it? He'd been poking at the game's edges for hours, testing what broke and what bent. This time, something snapped.\n\n${context}\n\nHe pulled out his notebook—the physical one, the one he kept hidden—and documented every detail. Conditions. Inputs. Results. Reproducibility.\n\nScience. That's all this was. Just science.`;
-          if (stage === 'opportunist') return `He'd been hunting for this—systematically probing game mechanics the way a thief cases a vault. And there it was.\n\n${context}\n\n**[System: Anomalous interaction logged. Investigation pending.]**\n\nHe dismissed the notification without blinking. Investigation pending? Let them investigate. By the time they figured out what he was doing, he'd have already moved on to the next exploit.\n\nThe corners of his mouth twitched. When had he started smiling at system warnings?`;
-          return `He didn't discover it. He engineered it.\n\n${context}\n\nMethodical. Precise. The way you'd design a weapon, not find a bug. Every variable controlled, every outcome predicted. The game's rules weren't laws—they were suggestions. And he'd stopped taking suggestions a long time ago.`;
-        }
-        if (dir.type === 'use') {
-          if (stage === 'naive_player' || stage === 'curious_tester') return `He activated the trick—the one he'd stumbled onto last time. His stats spiked, numbers climbing past their caps, and for thirty seconds he was untouchable.\n\nThe rush was... addictive. He'd think about that later. Or not.`;
-          if (stage === 'opportunist') return `The exploit activated like clockwork. He'd refined the process—two quick inputs, a timing window measured in milliseconds, and then the payoff.\n\n${context}\n\nThe system didn't flag it. It never did. He'd learned to operate in the blind spots between monitoring cycles, moving data through gaps the developers didn't know existed.\n\nEfficiency. That's all this was.`;
-          return `He activated the exploit with the casual precision of someone pressing a light switch. No hesitation. No guilt. Just execution.\n\n${context}\n\nThe numbers climbed. The system groaned but didn't break. He operated well within his safety margins—he'd calculated them to three decimal places. Risk management wasn't optional at his level. It was survival.`;
-        }
-        if (dir.type === 'evolve') return `Something changed.\n\nThe exploit he'd been using for weeks—reliable, predictable, safe—suddenly produced an output he'd never seen. The numbers didn't just climb. They transformed. A new variable appeared in the equation, and it changed everything.\n\n${context}\n\n**[System: ████ ██████ detected. Classification: UNKNOWN.]**\n\nHe stared at the corrupted notification. Even the system didn't know what he'd just done. For the first time in a long time, he felt something that might have been fear.\n\nOr excitement. They felt the same these days.`;
-        // test
-        return `He spent an hour testing boundaries—${stage === 'curious_tester' ? 'scribbling notes between each attempt' : 'methodical, clinical, like a surgeon probing for the edge of a tumor'}.\n\n${context}\n\nEach test revealed a little more of the machine beneath the magic.`;
-      })()
-    : '';
-
-  // CONCEALMENT SCENES — world-specific
-  const concealmentScene = blueprint?.closeCallScheduled
-    ? pick([
-        `"Hey—did you just—" Another player stopped mid-sentence, staring at Kael. They'd seen something. The way he'd moved, or the way the shadows had bent toward him, or the crimson flicker in his eyes that he still couldn't fully suppress.\n\n"Did I what?" Kael kept his voice flat. ${stage === 'naive_player' ? 'Confused. Genuinely confused.' : stage === 'paranoid_hider' ? 'The mask was instant. Practiced. Terrifyingly natural.' : 'Casual. Bored. A performance so smooth it scared him.'}\n\n"Nothing. I... nothing." They backed away, but they kept glancing over their shoulder.\n\nToo close. That was too close.`,
-        `The guild leader ran an inspection on him mid-raid. Standard protocol—checking everyone's gear and specs before the boss fight.\n\nKael's heart stopped. For three agonizing seconds, the inspection wheel spun.\n\n**[CLASS: Warrior — Level ${level}]**\n\nThe mask held. The class disguise he'd pieced together from Progenitor lore fragments worked. But for those three seconds, he'd lived an entire lifetime of consequences.\n\n${stage === 'paranoid_hider' ? '"Your gear stats are weird," the guild leader muttered. "Optimization is off."\n\n"I like the aesthetic," Kael said. "Fashion over function."\n\nThe guild leader snorted and moved on. But Kael made a mental note: upgrade the mask. The stats leak was getting harder to hide.' : '"Checks out," the guild leader said, and moved on. Kael exhaled.'}`,
-      ], rng)
-    : '';
-
-  // CHARACTER GROWTH — stage-specific internal monologue
-  const growthScene = blueprint?.characterGrowthBeat
-    ? (() => {
-        const beat = blueprint.characterGrowthBeat;
-        if (stage === 'naive_player') return `He was still treating this like a game. Running headlong into danger, laughing at the system notifications, treating every new ability like a birthday present.\n\n${beat ? `A thought surfaced: ${beat}` : ''}\n\nBut somewhere in the back of his mind, a voice whispered that birthday presents don't change your DNA.`;
-        if (stage === 'curious_tester') return `Between fights, he found himself cataloguing. Not loot—changes. The way his reaction time had improved by 12% since last week. The way the combat instincts were bleeding through, making him duck IRL when someone moved too fast nearby.\n\n${beat ? `${beat}\n\n` : ''}He'd started keeping notes. Not in the game—in a physical notebook, hidden under his mattress like contraband. The pattern was there. He just needed more data.`;
-        if (stage === 'opportunist') return `The realization hit him mid-combo: he wasn't just playing the game anymore. He was strip-mining it.\n\nEvery ability that transferred to reality, every stat boost that lingered after logout—they weren't bugs to report. They were resources to harvest. And he'd gotten very good at harvesting.\n\n${beat ? `${beat}\n\n` : ''}"When did I start thinking like this?" he asked the empty dungeon. The dungeon, predictably, offered no judgment.`;
-        if (stage === 'paranoid_hider') return `He paused mid-fight to scan the player list. Three new names in the zone. Were they watchers? Moderators in disguise? Just regular players?\n\n${beat ? `${beat}\n\n` : ''}The paranoia was exhausting. But less exhausting than being caught.`;
-        if (stage === 'strategic_abuser') return `He operated on two levels now. The surface level—the Warrior-class player doing standard content. And the deep level—the Progenitor running calculations, managing exploit cooldowns, timing his activities to the monitoring cycles he'd mapped through weeks of careful observation.\n\n${beat ? `${beat}\n\n` : ''}The old Kael would have been horrified. The new Kael was efficient.`;
-        return `He watched himself from a distance now—a cold, clinical observer of his own transformation.\n\n${beat ? `${beat}\n\n` : ''}The boy who'd first put on the headset wouldn't recognize what he'd become. And honestly? He wasn't sure that was a bad thing. He wasn't sure about a lot of things anymore. Except Yuna. Always Yuna.`;
-      })()
-    : '';
-
-  const content = [
-    pick(intros, rng),
-    '',
-    sysNotes[0],
-    '',
-    combatScene,
-    '',
-    sysNotes[1] || '',
-    '',
-    exploitScene,
-    '',
-    explorationScene,
-    '',
-    concealmentScene,
-    '',
-    loreScene,
-    '',
-    growthScene,
-    '',
-    sysNotes[2] || '',
-    '',
-    pick(endings, rng),
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-
-  const summaryOptions = [
-    `Kael reaches Level ${level} in Eclipsis Online, fighting through ${locations[0]} and discovering new lore about the Progenitor bloodline. His powers continue to grow, but so does the hunger.`,
-    `A dangerous dungeon run through ${locations[0]} tests Kael's limits as the Vampire Progenitor class evolves. ${npcs[0]} warns him about the deepening connection between game and reality.`,
-    `Kael explores ${locations[0]} and uncovers fragments of the Progenitor's forbidden history. The system warnings grow more frequent, and the boundary between worlds continues to thin.`,
-  ];
+  // ── Summary generation — more specific to what actually happened ──
+  const summaryParts: string[] = [`Kael (Level ${level}) ventures into ${locations[0]}`];
+  if (blueprint?.exploitDirective) summaryParts.push(`and ${blueprint.exploitDirective.type === 'discover' ? 'discovers a new exploit' : blueprint.exploitDirective.type === 'evolve' ? 'evolves an exploit to new heights' : 'uses an exploit strategically'}`);
+  if (blueprint?.closeCallScheduled) summaryParts.push('while narrowly avoiding exposure');
+  if (blueprint?.loreReveal) summaryParts.push('and uncovers a fragment of forbidden lore');
+  if (blueprint?.characterGrowthBeat) summaryParts.push(`. ${stage === 'naive_player' ? 'His innocence begins to crack.' : stage === 'paranoid_hider' ? 'The paranoia deepens.' : 'His transformation continues.'}`);
+  const summary = summaryParts.join(' ') + '.';
 
   const arcPhase = blueprint?.arcPhase ?? 'rising';
   const tensionLevel = blueprint?.tensionTarget ?? Math.min(100, 30 + chapterNumber * 3);
-  const primaryFocus = blueprint?.primaryFocus ?? 'action';
 
-  // Determine new elements
   const newChars = npcs.filter(() => rng() > 0.5);
   const newLocs = locations.filter(() => rng() > 0.6);
-
-  // Skills used this chapter
   const vrSkills = ['Crimson Surge', 'Nightsight', 'Blood Lance', 'Shadow Step', 'Hemoglobin Shield'];
   const skillsUsed = pickN(vrSkills, Math.min(2, Math.floor(level / 2) + 1), rng);
-
-  // Items gained
   const itemPool = ['Blood Catalyst', 'Shadow Cloak Fragment', 'Progenitor Shard', 'Crimson Vial', 'Ancient Rune'];
   const itemsGained = rng() > 0.6 ? [pick(itemPool, rng)] : [];
-
-  // Emotional tones for VR
   const vrTones = ['excitement', 'dread', 'determination', 'wonder', 'hunger', 'power'];
 
-  // Glossary updates
   const glossaryUpdates: Chapter['glossaryUpdates'] = [];
   for (const npc of newChars) {
-    glossaryUpdates.push({
-      id: `gl-${npc.toLowerCase().replace(/\s+/g, '-')}`,
-      type: 'character',
-      name: npc,
-      description: `An NPC encountered in ${locations[0]} during chapter ${chapterNumber}`,
-    });
+    glossaryUpdates.push({ id: `gl-${npc.toLowerCase().replace(/\s+/g, '-')}`, type: 'character', name: npc, description: `An NPC encountered in ${locations[0]} during chapter ${chapterNumber}` });
   }
   for (const loc of newLocs) {
-    glossaryUpdates.push({
-      id: `gl-${loc.toLowerCase().replace(/\s+/g, '-')}`,
-      type: 'location',
-      name: loc,
-      description: `A location discovered in chapter ${chapterNumber}`,
-    });
+    glossaryUpdates.push({ id: `gl-${loc.toLowerCase().replace(/\s+/g, '-')}`, type: 'location', name: loc, description: `A location discovered in chapter ${chapterNumber}` });
   }
-
-  // Codex updates for lore scenes
   const codexUpdates: Chapter['codexUpdates'] = [];
-  if (loreScene) {
-    codexUpdates.push({
-      id: `cx-lore-${chapterNumber}`,
-      category: 'lore',
-      title: `Progenitor Lore Fragment #${chapterNumber}`,
-      content: `Discovered in ${locations[0]} during chapter ${chapterNumber}`,
-    });
+  if (primaryFocus === 'lore' || blueprint?.loreReveal) {
+    codexUpdates.push({ id: `cx-lore-${chapterNumber}`, category: 'lore', title: `Progenitor Lore Fragment #${chapterNumber}`, content: `Discovered in ${locations[0]} during chapter ${chapterNumber}` });
   }
-
-  // Foreshadowing
-  const foreshadowingPlanted = blueprint?.foreshadowingToPlant ?? [];
-  const foreshadowingPaidOff = blueprint?.foreshadowingToPayoff ?? [];
 
   return {
-    id: `ch-${chapterNumber}`,
-    chapterNumber,
-    title,
-    content,
-    wordCount: content.split(/\s+/).length,
-    world: 'vr',
-    summary: pick(summaryOptions, rng),
-    characters,
-    locations,
+    id: `ch-${chapterNumber}`, chapterNumber, title, content,
+    wordCount: content.split(/\s+/).length, world: 'vr', summary, characters, locations,
     createdAt: new Date().toISOString(),
-    newCharacters: newChars,
-    newLocations: newLocs,
-    skillsUsed,
-    itemsGained,
+    newCharacters: newChars, newLocations: newLocs, skillsUsed, itemsGained,
     plotThreadsAdvanced: blueprint?.mustAdvancePlots ?? ['plot-progenitor-awakening'],
-    foreshadowingPlanted,
-    foreshadowingPaidOff,
-    emotionalTone: pick(vrTones, rng),
-    arcPhase,
-    tensionLevel,
+    foreshadowingPlanted: blueprint?.foreshadowingToPlant ?? [],
+    foreshadowingPaidOff: blueprint?.foreshadowingToPayoff ?? [],
+    emotionalTone: pick(vrTones, rng), arcPhase, tensionLevel,
     arcId: blueprint ? 'arc-main-progenitor' : undefined,
-    glossaryUpdates,
-    codexUpdates,
+    glossaryUpdates, codexUpdates,
   };
 }
 
@@ -1250,13 +1403,134 @@ function generateRealChapter(
   const titleWord = pick(REAL_TITLES, rng);
   const title = `Chapter ${chapterNumber}: ${titleWord}`;
   const locations: string[] = pickN(REAL_LOCATIONS, 2, rng);
-  const hasAlex = rng() > 0.4;
+  const hasAlex = blueprint?.relationshipFocus === 'alex' || rng() > 0.4;
   const characters: string[] = ['Kael', 'Yuna', ...(hasAlex ? ['Alex'] : [])];
+  const stage = blueprint?.mcStage ?? 'naive_player';
+  const primaryFocus = blueprint?.primaryFocus ?? 'character';
 
-  const hospitalScene = pick(REAL_HOSPITAL_SCENES, rng)();
-  const realityBleed = pick(REAL_REALITY_BLEED, rng)();
-  const alexScene = hasAlex ? pick(REAL_ALEX_SCENES, rng)() : '';
+  // ── Continuity from previous chapter ──
+  const continuityOpener = buildContinuityOpener(previousChapter, rng);
 
+  // ── Build scene blocks with tension scores for dynamic assembly ──
+  const scenes: SceneBlock[] = [];
+
+  // HOSPITAL SCENE — always available but not always required
+  scenes.push({
+    key: 'hospital', content: pick(REAL_HOSPITAL_SCENES, rng)(),
+    tension: 30, focus: 'emotional', required: primaryFocus === 'emotional',
+  });
+
+  // REALITY BLEED — the game follows him home
+  scenes.push({
+    key: 'reality_bleed', content: pick(REAL_REALITY_BLEED, rng)(),
+    tension: 50, focus: 'revelation', required: primaryFocus === 'revelation',
+  });
+
+  // ALEX SCENE — when Alex is present
+  if (hasAlex) {
+    scenes.push({
+      key: 'alex', content: pick(REAL_ALEX_SCENES, rng)(),
+      tension: 45, focus: 'social', required: primaryFocus === 'social' || blueprint?.relationshipFocus === 'alex',
+    });
+  }
+
+  // NEW: DAILY LIFE SCENE — mundane moments that show how abnormal Kael has become
+  if (primaryFocus === 'character' || rng() > 0.45) {
+    const dailyLifeScenes = [
+      () => `The grocery run should have been simple. Bread, eggs, instant ramen — the diet of a man who'd forgotten how to care about nutrition. But the fluorescent lights were migraine-bright to his enhanced eyes, and the background music was a cacophony of layered frequencies only he could parse.\n\nHe found himself reading the barcode on a cereal box. Not the numbers — the pattern beneath them. A sequence that reminded him of the runic structures in Eclipsis.\n\n"Sir? Are you okay?" The cashier was staring.\n\n"Fine," he said. "Just... reading the ingredients."`,
+      () => `He tried to cook dinner. Actually cook — not microwave, not order in, but stand at the stove and make something Yuna used to make. Miso soup.\n\nThe recipe was simple. The execution was not. His hands moved too fast, chopping vegetables with a precision that would have made a sushi chef weep. The knife was a blur. Perfect cuts. Identical thickness. Every piece exactly 3mm.\n\nHe stared at the cutting board. No human cut this precisely. No human moved this fast without thinking about it.\n\nHe ate the soup standing up, tasting nothing, wondering when "human" had become a category he was leaving behind.`,
+      () => `Laundry day. The most mundane task in a life that had become anything but mundane.\n\nHe sorted his clothes in the basement laundromat, trying to feel normal. But the machines were too loud — he could hear every bearing, every motor cycle, every drip from every pipe in the building. And the other tenants...\n\nThe woman in 3A had an irregular heartbeat. The man from 5C smelled like bourbon and regret. The teenager from 2B was texting someone about him — "the weird quiet guy from upstairs."\n\nHe folded his laundry and left. Some kinds of knowledge you couldn't unlearn.`,
+      (ch: number) => `He stood in line at the pharmacy, waiting for the vitamins he didn't need and the sleeping pills that didn't work. The girl behind the counter gave him a look.\n\n"You don't look like you need supplements," she said. "No offense, but you look... really healthy. Like, athlete healthy."\n\n"Genetics," he said.\n\nShe didn't look convinced. Neither was he. Three months ago, he'd been gaunt from skipping meals and hollowed out by grief. Now he looked like a magazine cover. The Progenitor class didn't just change stats. It was rewriting his entire physical template.\n\n${ch > 15 ? 'On the way out, he caught his reflection in the store window. The person looking back was a stranger wearing his face.' : 'He took the vitamins anyway. The performance of normalcy required props.'}`,
+    ];
+    scenes.push({
+      key: 'daily_life', content: pick(dailyLifeScenes, rng)(chapterNumber),
+      tension: 20, focus: 'character', required: primaryFocus === 'character',
+    });
+  }
+
+  // NEW: INVESTIGATION SCENE — someone is looking into Kael
+  if (primaryFocus === 'stealth' || (stage !== 'naive_player' && rng() > 0.55)) {
+    const investigationScenes = [
+      () => `He found the note under his door at 6 AM. Plain white paper, laser-printed, no fingerprints (he checked — enhanced perception had its uses):\n\n*"I know what you are. Meet me at the park bench by the fountain. Come alone."*\n\nHe stood there for five minutes, running scenarios. Trap? Bluff? Someone who actually knew? The possibilities branched like a decision tree, and at the end of every branch was a different kind of disaster.\n\nHe burned the note. He didn't go to the park.\n\nBut for the rest of the day, every stranger's glance felt like surveillance.`,
+      () => `The email arrived in his spam folder, which was the only reason the sender's anonymizer hadn't been flagged. Subject line: "RE: Eclipsis Online Account Review."\n\nThe body was a single sentence: *"Your account has been flagged for anomalous activity. A representative will contact you within 72 hours."*\n\nHe stared at the email. Checked the headers. The routing was garbage — bounced through six countries and a defunct email server. But the timing...\n\n${stage === 'paranoid_hider' ? 'He deleted the email, cleared his trash, cleared his browser history, and then sat in the dark for an hour, planning.' : stage === 'strategic_abuser' ? 'He saved the email headers for analysis. Every threat was also intelligence. Every enemy approach revealed their position.' : 'He deleted the email and tried to forget about it. He failed.'}`,
+      () => `Alex had been asking questions. Not to Kael — to other people. The bartender at their usual spot mentioned it casually: "Your friend was in here yesterday, asking if I'd noticed anything different about you."\n\nKael's blood went cold. Not the game-cold, the real cold — the kind that comes from realizing someone you love is becoming a threat.\n\n"What did you tell him?"\n\n"I said you seemed healthier. He didn't look happy about that."\n\nKael left a bigger tip than usual and took a different route home. The walls were closing in from a direction he hadn't anticipated: loyalty.`,
+    ];
+    scenes.push({
+      key: 'investigation', content: pick(investigationScenes, rng)(),
+      tension: 65, focus: 'stealth', required: primaryFocus === 'stealth',
+    });
+  }
+
+  // NEW: YUNA MOMENT — deeper connection beyond just visiting
+  if (blueprint?.relationshipFocus === 'yuna' || rng() > 0.5) {
+    const yunaMoments = [
+      () => `He brought flowers again. Sunflowers — her favorite. The nurses had stopped giving him sympathetic looks months ago. Now they just nodded. Routine. Part of the landscape.\n\nBut today, when he sat down and took her hand, something was different. Not in her — in him. He could feel it now, with the Progenitor's enhanced perception: a faint electrical hum beneath her skin. Not the machines. Something else. Something alive and digital and impossibly complex.\n\n"You're in there," he whispered. "You're in Eclipsis, aren't you? Somewhere I haven't found yet."\n\nHer EEG spiked. Just for a second. Just enough to make him believe.`,
+      () => `He read to her. Chapter four of the book they'd been reading before the accident — a fantasy novel about a girl who falls into a painting and has to find her way back to reality.\n\nThe irony wasn't lost on him.\n\n"I'm coming for you," he said when the chapter ended. "I don't know how yet, but I'm getting closer. The game... there's something in it. A key. A door. Something that connects to wherever you are."\n\nThe monitors beeped. Steady. Unchanged.\n\nBut her hand — the hand he'd been holding — twitched. Just once. Just enough.`,
+      (ch: number) => `Dr. Yamada stopped him in the corridor.\n\n"Her scans are changing, Kael. I don't want to give false hope, but..." She pulled up images on her tablet. Yuna's brain activity, mapped in color. Blues and greens from six months ago. Now: reds and golds, pulsing in patterns that looked like...\n\n"That looks like a map," Kael said.\n\n"It looks like a dungeon layout," Dr. Yamada said carefully. "I showed it to a colleague who plays video games. He said it looks like a procedurally generated maze."\n\nThe world tilted. ${ch > 20 ? 'He knew exactly which maze it was. He\'d cleared it last week.' : 'He thanked her and walked away on legs that didn\'t feel real.'}`,
+    ];
+    scenes.push({
+      key: 'yuna_moment', content: pick(yunaMoments, rng)(chapterNumber),
+      tension: 35, focus: 'emotional', required: blueprint?.relationshipFocus === 'yuna',
+    });
+  }
+
+  // CONCEALMENT PRESSURE SCENE
+  if (blueprint?.concealmentPressure && blueprint.concealmentPressure !== 'none') {
+    const pressure = blueprint.concealmentPressure;
+    let concealmentContent = '';
+    if (pressure === 'critical') concealmentContent = `The walls were closing in.\n\nKael sat in his apartment with the curtains drawn, running through his cover stories like flashcards. The martial arts excuse for the reflexes. The eye surgery story for the nightsight. The protein supplement lie for the strength. Each one had cracks. Each crack was widening.\n\nHe'd started wearing long sleeves even in summer—the veins in his forearms had taken on a faintly luminous quality that no amount of foundation could fully conceal. And his body temperature had dropped three degrees below normal. Any doctor would flag it instantly.\n\nThe world was getting smaller. The list of people he could safely interact with was getting shorter.`;
+    else if (pressure === 'high') concealmentContent = `He caught himself doing it again—moving too fast, reacting before the stimulus. The barista at the coffee shop had fumbled a cup and he'd caught it mid-air, arm snapping out with inhuman precision. She stared at him. He stared at the cup.\n\n"Good reflexes," she said.\n\n"Yeah," he managed. "I play a lot of... video games."\n\nThe excuse was wearing thin. They all were. ${stage === 'paranoid_hider' ? 'He\'d need a better story. Maybe it was time to switch coffee shops again.' : ''}`;
+    else concealmentContent = `The maintenance man had knocked on his door at 8 AM to fix the radiator. Kael had answered without thinking—no sunglasses, no contact lenses, pupils contracted to pinpoints in the morning light.\n\n"You okay, kid?" the man had asked, squinting at him. "Your eyes look... weird."\n\n"Allergies," Kael said, already calculating how quickly he could get to the sunglasses on his nightstand. "Bad season."`;
+    scenes.push({
+      key: 'concealment', content: concealmentContent,
+      tension: pressure === 'critical' ? 80 : pressure === 'high' ? 60 : 40,
+      focus: 'concealment', required: true,
+    });
+  }
+
+  // CLOSE CALL SCENE
+  if (blueprint?.closeCallScheduled) {
+    const closeCallContent = pick([
+      `The moment came without warning. A car ran a red light. Kael saw it—not with human eyes, but with the Progenitor's sight, time slowing to a crawl as his enhanced perception kicked in. He grabbed the stranger beside him and pulled them back, moving faster than any human should.\n\nThe car passed. The stranger was safe. And three people on the sidewalk were staring at Kael with expressions that ranged from grateful to terrified.\n\n"How did you—"\n\n"Adrenaline," he said. ${stage === 'paranoid_hider' ? 'The lie came so smoothly it disgusted him.' : 'The word tasted like ash.'} "Just adrenaline."`,
+      `He was walking past a construction site when a steel beam slipped from a crane. He heard it before anyone else—the groan of stressed cable, the snap of the safety latch—and was moving before the warning shouts began.\n\nHe didn't just dodge. He caught it. One hand. Three hundred pounds of structural steel, held like a broomstick for one impossible second before he let it fall.\n\nThe construction workers stared. A woman across the street had her phone out.\n\n${stage === 'naive_player' ? 'He ran. Not from the scene—from the impossibility of what he\'d just done.' : stage === 'paranoid_hider' ? '"I train for strongman competitions," he said to no one in particular, already calculating escape routes and checking for cameras.' : 'He walked away before anyone could get a clear photo. Steady pace. Natural. Nothing to see here.'}`,
+      `Alex showed up unannounced. Kael was in the middle of a set of one-handed pushups—on his fingertips, with a 40-pound backpack. Things that would have been impossible three months ago.\n\n"What the HELL."\n\nKael dropped flat, scrambled up, tried to look casual. "Hey. Didn't hear you knock."\n\n"I didn't knock. The door was unlocked. And you didn't hear me because you were doing WHAT exactly?"\n\n"Exercising."\n\n"On your fingertips. With a weighted backpack. Kael, six months ago you couldn't do ten regular pushups."\n\n${stage === 'curious_tester' ? '"I\'ve been really committed to the new routine," Kael said. The lie felt heavier than the backpack.' : stage === 'paranoid_hider' ? '"It\'s the supplements," Kael said, hating every word. "And yeah, I\'ve been training while you\'re not around. Does that bother you?"\n\nThe deflection—turning it into an accusation—was a technique he\'d read about. It worked. Alex backed off. But the look in his eyes said this conversation wasn\'t over.' : '"I\'ve been working out more. The game motivates me."\n\nIt wasn\'t entirely a lie. That was the worst part.'}`,
+    ], rng);
+    scenes.push({
+      key: 'close_call', content: closeCallContent,
+      tension: 75, focus: 'stealth', required: true,
+    });
+  }
+
+  // TRANSFER EVENT SCENE
+  if (blueprint?.transferEvent) {
+    const transferContent = pick([
+      `It happened in the shower. He was rinsing off, trying to feel normal, when he noticed his reflection in the bathroom mirror through the steam. His skin was different—paler, smoother, like porcelain given life. And when he flexed his hand, he could feel something new: a pulse of energy that didn't come from his body.\n\nAnother transfer. Another piece of the game following him home.\n\n${stage === 'naive_player' ? 'He stared at his hands for a long time, waiting for it to go away. It didn\'t.' : stage === 'opportunist' ? 'He flexed his hand again, testing the range. Cataloguing. Already thinking about applications.' : 'He added it to the list. The list was on page seven now.'}`,
+      `He was reading a book—an actual paper book, because screens gave him headaches now—when the words rearranged themselves. For three seconds, the English text transformed into the runic script from Eclipsis Online. He could read it. Both languages, simultaneously, overlaid like a palimpsest.\n\nThen it was just English again.\n\n${stage === 'curious_tester' ? 'He grabbed his notebook. Date, time, duration, trigger conditions. The data set was growing.' : stage === 'paranoid_hider' ? 'He glanced around the empty apartment, as if someone might have seen.' : 'He turned the page and kept reading. Abnormality had become his baseline.'}`,
+      `He was jogging—keeping it slow, human-slow, because the alternative was sprinting at 40mph and explaining that to pedestrians—when he felt it. A warmth in his chest, spreading outward. A new stat had settled in.\n\nVitality. The game's version of constitution and healing rate, now humming beneath his skin like a second heartbeat.\n\nHe stopped jogging and pressed his fingers to a scrape on his arm from yesterday. As he watched, the skin knit closed. Not fast—not movie-fast—but faster than any human wound should heal.\n\n${stage === 'paranoid_hider' ? 'He immediately checked for witnesses. Clear. He pulled his sleeve down and started walking. Normal pace. Nothing to see.' : '"Huh," he said to the empty path. Then he started running again. Faster this time.'}`,
+    ], rng);
+    scenes.push({
+      key: 'transfer', content: transferContent,
+      tension: 55, focus: 'revelation', required: true,
+    });
+  }
+
+  // CHARACTER GROWTH SCENE — stage-driven
+  if (blueprint?.characterGrowthBeat) {
+    const beat = blueprint.characterGrowthBeat;
+    let growthContent = '';
+    if (stage === 'naive_player') growthContent = `He told himself it would stop. The changes, the abilities, the hunger—they would fade like a dream fades in morning light. He almost believed it.\n\n${beat ? `But then: ${beat}\n\n` : ''}In Yuna's room, holding her hand, he felt most like himself. The old self. The one who wasn't becoming something else.`;
+    else if (stage === 'curious_tester') growthContent = `He'd started testing. Methodically, in private, behind locked doors.\n\nLift the couch with one hand? Check. Read a license plate from three blocks away? Check. Hear the neighbor's TV through two walls? Check.\n\nEach confirmation sent a thrill through him that he wasn't ready to examine.\n\n${beat ? `${beat}\n\n` : ''}The thrill was the problem. He was starting to enjoy this.`;
+    else if (stage === 'opportunist') growthContent = `He used the Nightsight to read the serial numbers on a locked filing cabinet at the hospital—Yuna's medical records, the ones they wouldn't let him see. Enhanced hearing to eavesdrop on Dr. Yamada's conversation with a colleague about "unprecedented neural restructuring."\n\n${beat ? `${beat}\n\n` : ''}He told himself it was for Yuna. The truth was more complicated. He was using his powers because he could, and the line between "for Yuna" and "because it feels good" was getting harder to see.`;
+    else if (stage === 'paranoid_hider') growthContent = `Every mirror was a threat. Every camera, every phone pointed in his direction. He'd mapped every security camera on his three routes to the hospital, timed the patrol schedules of the night security guard, and memorized the shift changes at the 7-Eleven where he sometimes pretended to buy coffee.\n\n${beat ? `${beat}\n\n` : ''}When had he become this person? When had the boy who just wanted to save his sister turned into someone who thought in escape routes and cover stories?`;
+    else if (stage === 'strategic_abuser') growthContent = `He sat in the dark apartment and took inventory with the cold precision of someone cataloguing weapons.\n\nNightsight: active. Enhanced reflexes: permanent. Strength: approximately three times baseline. Healing: accelerated. Perception: superhuman. Vitality stat: stabilized.\n\nThe list went on. Each item was a tool. Each tool had concealment protocols. Each protocol had backup protocols.\n\n${beat ? `${beat}\n\n` : ''}He wasn't hiding from what he'd become anymore. He was optimizing it.`;
+    else growthContent = `He sat at Yuna's bedside and held her hand, and for once, he didn't try to be anything. Not the Progenitor. Not the survivor. Not the strategist. Just a brother.\n\n"I'm close," he whispered. "I don't know what I'll have to become to finish this, but I'm close."\n\n${beat ? `${beat}\n\n` : ''}Her heart monitor beeped. Steady. Unchanged. But her EEG—the one he could now read with stolen medical knowledge—showed patterns he recognized from the game.\n\nShe was in there. And she was playing.`;
+    scenes.push({
+      key: 'growth', content: growthContent,
+      tension: 25, focus: 'character', required: false,
+    });
+  }
+
+  // ── Intros — more variety ──
   const intros = [
     `The real world felt thin. That was the only way Kael could describe it—thin, like paper stretched too far, like reality was a photograph that had been exposed to too much light. Colors washed out. Sounds muted. Everything except the hunger, which was vivid and sharp and growing.`,
     `Kael's alarm went off at 7:00 AM. He knew this because he'd been awake since 3:47, lying in the dark, listening to sounds no human should be able to hear. The couple in 4B arguing in whispers. The mouse in the walls between floors two and three. His own heartbeat, steady and slow, impossibly slow—forty-eight beats per minute.`,
@@ -1264,141 +1538,62 @@ function generateRealChapter(
     previousChapter
       ? `The aftereffects of his last session lingered like a hangover written in someone else's blood. His muscles ached with phantom memory—of combat he'd fought in a world that shouldn't exist, against creatures that shouldn't be real, with powers that had no business following him home.`
       : `Morning light sliced through the gap in his curtains like a blade. Kael flinched. He'd never been sensitive to light before. Now, sunlight felt like someone pressing thumbs against his eyeballs.`,
+    `Rain against the windows. The city gray and indifferent. Kael stood in his kitchen, hands wrapped around a mug of coffee he wouldn't drink, watching the water streak down the glass and trying to remember what it felt like to be ordinary.`,
+    `He caught himself counting heartbeats again. His: forty-four per minute and falling. The neighbor's dog: a hundred and twelve, muffled through two walls. A pigeon on the windowsill: two hundred and sixty, rapid and fragile as tissue paper.\n\nHe could hear them all. He couldn't unhear them.`,
   ];
 
+  // ── Endings — more variety ──
   const endings = [
     `He lay in bed that night, staring at the ceiling, and felt the pull. The headset sat on his desk, its faceplate reflecting the city lights that filtered through his window. It called to him without sound, without words—a gravity that lived beneath thought.\n\nLevel ${level + 1} waited. New abilities. New power. New answers.\n\nAnd somewhere in Eclipsis Online, Kael was certain, Yuna was waiting too.`,
     `The last thing he saw before sleep took him was the headset, pulsing with that faint, rhythmic light. In his dreams, he stood in a room made of mirrors, and every reflection wore his face but with crimson eyes.\n\nOne of the reflections smiled.\n\n"Soon," it whispered. "Soon you'll stop pretending there's a difference."`,
     `His phone buzzed. A text from an unknown number:\n\n*"The Progenitor class wasn't created by the developers. It was created by the game. And the game is not what you think it is."*\n\nHe stared at the message until his screen dimmed, then went dark. In the black mirror of his phone's surface, his eyes—for just a moment—were not his own.`,
     `At 11:47 PM, every light in his apartment flickered. His laptop screen glitched, displaying a cascade of code he didn't recognize. And on his phone, a notification from an app he'd never installed:\n\n*"Eclipsis Online: Real-World Integration — Phase ${Math.min(level, 5)} of 7 complete."*\n\nHe deleted the notification. But he couldn't delete the feeling that something was watching him through the screen.`,
+    `Sleep didn't come. It never came easily anymore — his body ran on something other than rest now. He lay in the dark, eyes open, seeing the apartment in perfect detail: every crack in the ceiling, every dust mote suspended in the still air, every shadow that wasn't quite empty.\n\nThe headset hummed on his desk. Patient. Waiting.\n\nHe'd go back tomorrow. He always went back. The question wasn't whether. It was how much of himself would be left when he finally couldn't.`,
+    `He found a photo of himself from two years ago. Before the game. Before the changes. Before the hunger.\n\nThe face in the photo was softer. Rounder. Human in a way his current reflection wasn't. The eyes were brown — just brown — without the faint crimson undertone that now lived permanently in his irises.\n\nHe put the photo in a drawer. Looking at the past was a luxury he couldn't afford. The future was coming too fast, and it had teeth.`,
   ];
 
-  // ─── Narrative intelligence scenes from blueprint ────────────────────────
-  const stage = blueprint?.mcStage ?? 'naive_player';
+  // ── Assemble chapter with dynamic scene ordering ──
+  const content = assembleChapter(
+    scenes, pick(intros, rng), pick(endings, rng),
+    REAL_TRANSITIONS, continuityOpener, rng,
+  );
 
-  // CONCEALMENT PRESSURE SCENES — escalating
-  const concealmentScene = (() => {
-    const pressure = blueprint?.concealmentPressure;
-    if (pressure === 'critical') return `The walls were closing in.\n\nKael sat in his apartment with the curtains drawn, running through his cover stories like flashcards. The martial arts excuse for the reflexes. The eye surgery story for the nightsight. The protein supplement lie for the strength. Each one had cracks. Each crack was widening.\n\nHe'd started wearing long sleeves even in summer—the veins in his forearms had taken on a faintly luminous quality that no amount of foundation could fully conceal. And his body temperature had dropped three degrees below normal. Any doctor would flag it instantly.\n\nThe world was getting smaller. The list of people he could safely interact with was getting shorter.`;
-    if (pressure === 'high') return `He caught himself doing it again—moving too fast, reacting before the stimulus. The barista at the coffee shop had fumbled a cup and he'd caught it mid-air, arm snapping out with inhuman precision. She stared at him. He stared at the cup.\n\n"Good reflexes," she said.\n\n"Yeah," he managed. "I play a lot of... video games."\n\nThe excuse was wearing thin. They all were. ${stage === 'paranoid_hider' ? 'He\'d need a better story. Maybe it was time to switch coffee shops again.' : ''}`;
-    if (pressure === 'medium') return `The maintenance man had knocked on his door at 8 AM to fix the radiator. Kael had answered without thinking—no sunglasses, no contact lenses, pupils contracted to pinpoints in the morning light.\n\n"You okay, kid?" the man had asked, squinting at him. "Your eyes look... weird."\n\n"Allergies," Kael said, already calculating how quickly he could get to the sunglasses on his nightstand. "Bad season."`;
-    return '';
-  })();
-
-  // CLOSE CALL SCENES — real world, stage-appropriate
-  const closeCallScene = blueprint?.closeCallScheduled
-    ? pick([
-        `The moment came without warning. A car ran a red light. Kael saw it—not with human eyes, but with the Progenitor's sight, time slowing to a crawl as his enhanced perception kicked in. He grabbed the stranger beside him and pulled them back, moving faster than any human should.\n\nThe car passed. The stranger was safe. And three people on the sidewalk were staring at Kael with expressions that ranged from grateful to terrified.\n\n"How did you—"\n\n"Adrenaline," he said. ${stage === 'paranoid_hider' ? 'The lie came so smoothly it disgusted him.' : 'The word tasted like ash.'} "Just adrenaline."`,
-        `He was walking past a construction site when a steel beam slipped from a crane. He heard it before anyone else—the groan of stressed cable, the snap of the safety latch—and was moving before the warning shouts began.\n\nHe didn't just dodge. He caught it. One hand. Three hundred pounds of structural steel, held like a broomstick for one impossible second before he let it fall.\n\nThe construction workers stared. A woman across the street had her phone out.\n\n${stage === 'naive_player' ? 'He ran. Not from the scene—from the impossibility of what he\'d just done.' : stage === 'paranoid_hider' ? '"I train for strongman competitions," he said to no one in particular, already calculating escape routes and checking for cameras.' : 'He walked away before anyone could get a clear photo. Steady pace. Natural. Nothing to see here.'}`,
-        `Alex showed up unannounced. Kael was in the middle of a set of one-handed pushups—on his fingertips, with a 40-pound backpack. Things that would have been impossible three months ago.\n\n"What the HELL."\n\nKael dropped flat, scrambled up, tried to look casual. "Hey. Didn't hear you knock."\n\n"I didn't knock. The door was unlocked. And you didn't hear me because you were doing WHAT exactly?"\n\n"Exercising."\n\n"On your fingertips. With a weighted backpack. Kael, six months ago you couldn't do ten regular pushups."\n\n${stage === 'curious_tester' ? '"I\'ve been really committed to the new routine," Kael said. The lie felt heavier than the backpack.' : stage === 'paranoid_hider' ? '"It\'s the supplements," Kael said, hating every word. "And yeah, I\'ve been training while you\'re not around. Does that bother you?"\n\nThe deflection—turning it into an accusation—was a technique he\'d read about. It worked. Alex backed off. But the look in his eyes said this conversation wasn\'t over.' : '"I\'ve been working out more. The game motivates me."\n\nIt wasn\'t entirely a lie. That was the worst part.'}`,
-      ], rng)
-    : '';
-
-  // TRANSFER EVENT SCENES — the game follows him home
-  const transferScene = blueprint?.transferEvent
-    ? pick([
-        `It happened in the shower. He was rinsing off, trying to feel normal, when he noticed his reflection in the bathroom mirror through the steam. His skin was different—paler, smoother, like porcelain given life. And when he flexed his hand, he could feel something new: a pulse of energy that didn't come from his body.\n\nAnother transfer. Another piece of the game following him home.\n\n${stage === 'naive_player' ? 'He stared at his hands for a long time, waiting for it to go away. It didn\'t.' : stage === 'opportunist' ? 'He flexed his hand again, testing the range. Cataloguing. Already thinking about applications.' : 'He added it to the list. The list was on page seven now.'}`,
-        `He was reading a book—an actual paper book, because screens gave him headaches now—when the words rearranged themselves. For three seconds, the English text transformed into the runic script from Eclipsis Online. He could read it. Both languages, simultaneously, overlaid like a palimpsest.\n\nThen it was just English again.\n\n${stage === 'curious_tester' ? 'He grabbed his notebook. Date, time, duration, trigger conditions. The data set was growing.' : stage === 'paranoid_hider' ? 'He glanced around the empty apartment, as if someone might have seen.' : 'He turned the page and kept reading. Abnormality had become his baseline.'}`,
-        `He was jogging—keeping it slow, human-slow, because the alternative was sprinting at 40mph and explaining that to pedestrians—when he felt it. A warmth in his chest, spreading outward. A new stat had settled in.\n\nVitality. The game's version of constitution and healing rate, now humming beneath his skin like a second heartbeat.\n\nHe stopped jogging and pressed his fingers to a scrape on his arm from yesterday. As he watched, the skin knit closed. Not fast—not movie-fast—but faster than any human wound should heal.\n\n${stage === 'paranoid_hider' ? 'He immediately checked for witnesses. Clear. He pulled his sleeve down and started walking. Normal pace. Nothing to see.' : '"Huh," he said to the empty path. Then he started running again. Faster this time.'}`,
-      ], rng)
-    : '';
-
-  // CHARACTER GROWTH — real-world internal monologue, stage-driven
-  const growthScene = blueprint?.characterGrowthBeat
-    ? (() => {
-        const beat = blueprint.characterGrowthBeat;
-        if (stage === 'naive_player') return `He told himself it would stop. The changes, the abilities, the hunger—they would fade like a dream fades in morning light. He almost believed it.\n\n${beat ? `But then: ${beat}\n\n` : ''}In Yuna's room, holding her hand, he felt most like himself. The old self. The one who wasn't becoming something else.`;
-        if (stage === 'curious_tester') return `He'd started testing. Methodically, in private, behind locked doors.\n\nLift the couch with one hand? Check. Read a license plate from three blocks away? Check. Hear the neighbor's TV through two walls? Check.\n\nEach confirmation sent a thrill through him that he wasn't ready to examine.\n\n${beat ? `${beat}\n\n` : ''}The thrill was the problem. He was starting to enjoy this.`;
-        if (stage === 'opportunist') return `He used the Nightsight to read the serial numbers on a locked filing cabinet at the hospital—Yuna's medical records, the ones they wouldn't let him see. Enhanced hearing to eavesdrop on Dr. Yamada's conversation with a colleague about "unprecedented neural restructuring."\n\n${beat ? `${beat}\n\n` : ''}He told himself it was for Yuna. The truth was more complicated. He was using his powers because he could, and the line between "for Yuna" and "because it feels good" was getting harder to see.`;
-        if (stage === 'paranoid_hider') return `Every mirror was a threat. Every camera, every phone pointed in his direction. He'd mapped every security camera on his three routes to the hospital, timed the patrol schedules of the night security guard, and memorized the shift changes at the 7-Eleven where he sometimes pretended to buy coffee.\n\n${beat ? `${beat}\n\n` : ''}When had he become this person? When had the boy who just wanted to save his sister turned into someone who thought in escape routes and cover stories?`;
-        if (stage === 'strategic_abuser') return `He sat in the dark apartment and took inventory with the cold precision of someone cataloguing weapons.\n\nNightsight: active. Enhanced reflexes: permanent. Strength: approximately three times baseline. Healing: accelerated. Perception: superhuman. Vitality stat: stabilized.\n\nThe list went on. Each item was a tool. Each tool had concealment protocols. Each protocol had backup protocols.\n\n${beat ? `${beat}\n\n` : ''}He wasn't hiding from what he'd become anymore. He was optimizing it.`;
-        return `He sat at Yuna's bedside and held her hand, and for once, he didn't try to be anything. Not the Progenitor. Not the survivor. Not the strategist. Just a brother.\n\n"I'm close," he whispered. "I don't know what I'll have to become to finish this, but I'm close."\n\n${beat ? `${beat}\n\n` : ''}Her heart monitor beeped. Steady. Unchanged. But her EEG—the one he could now read with stolen medical knowledge—showed patterns he recognized from the game.\n\nShe was in there. And she was playing.`;
-      })()
-    : '';
-
-  const content = [
-    pick(intros, rng),
-    '',
-    hospitalScene,
-    '',
-    concealmentScene,
-    '',
-    alexScene,
-    '',
-    closeCallScene,
-    '',
-    realityBleed,
-    '',
-    transferScene,
-    '',
-    growthScene,
-    '',
-    pick(endings, rng),
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-
-  const summaryOptions = [
-    `Kael visits Yuna at the hospital and notices changes in her brain activity. The stat-merge effects from Eclipsis Online continue to manifest in reality, growing harder to hide.`,
-    `The line between the VR world and reality continues to blur as Kael deals with the physical changes the Progenitor class is causing. ${hasAlex ? 'Alex grows increasingly worried about the changes in his friend.' : 'Kael struggles with isolation.'}`,
-    `Real-world consequences of Kael's time in Eclipsis Online become impossible to ignore. His senses sharpen, his body changes, and the hunger grows. ${hasAlex ? 'A tense conversation with Alex raises questions neither can answer.' : 'Yuna\'s condition shows unexpected changes.'}`,
-  ];
+  // ── Dynamic summary ──
+  const summaryParts: string[] = [];
+  if (scenes.some(s => s.key === 'hospital' || s.key === 'yuna_moment')) summaryParts.push('Kael visits Yuna at the hospital');
+  if (hasAlex) summaryParts.push(`${summaryParts.length ? 'and confronts' : 'Kael confronts'} Alex's growing suspicions`);
+  if (blueprint?.closeCallScheduled) summaryParts.push('while surviving a close call that threatens his cover');
+  if (blueprint?.transferEvent) summaryParts.push('. A new transfer from Eclipsis manifests in reality');
+  if (blueprint?.concealmentPressure === 'critical' || blueprint?.concealmentPressure === 'high') summaryParts.push('. The pressure of concealment reaches a breaking point');
+  if (summaryParts.length === 0) summaryParts.push('Kael navigates the real world as the changes from Eclipsis Online continue to transform him');
+  const summary = summaryParts.join(' ') + '.';
 
   const arcPhase = blueprint?.arcPhase ?? 'rising';
   const tensionLevel = blueprint?.tensionTarget ?? Math.min(100, 25 + chapterNumber * 2);
-  const primaryFocus = blueprint?.primaryFocus ?? 'character';
-
-  // Real world emotional tones
   const realTones = ['anxiety', 'isolation', 'determination', 'paranoia', 'hope', 'grief', 'connection'];
 
-  // Glossary updates
   const glossaryUpdates: Chapter['glossaryUpdates'] = [];
   if (hasAlex && chapterNumber <= 3) {
-    glossaryUpdates.push({
-      id: 'gl-alex',
-      type: 'character',
-      name: 'Alex',
-      description: 'Kael\'s best friend who notices the physical changes happening to him',
-    });
+    glossaryUpdates.push({ id: 'gl-alex', type: 'character', name: 'Alex', description: 'Kael\'s best friend who notices the physical changes happening to him' });
   }
-
-  // Codex for real-world revelations
   const codexUpdates: Chapter['codexUpdates'] = [];
-  if (rng() > 0.6) {
-    codexUpdates.push({
-      id: `cx-real-${chapterNumber}`,
-      category: 'system',
-      title: `Reality Bleed Incident #${Math.ceil(chapterNumber / 2)}`,
-      content: `Kael experiences game abilities manifesting in the real world during chapter ${chapterNumber}`,
-    });
+  if (blueprint?.transferEvent || rng() > 0.6) {
+    codexUpdates.push({ id: `cx-real-${chapterNumber}`, category: 'system', title: `Reality Bleed Incident #${Math.ceil(chapterNumber / 2)}`, content: `Kael experiences game abilities manifesting in the real world during chapter ${chapterNumber}` });
   }
-
-  const foreshadowingPlanted = blueprint?.foreshadowingToPlant ?? [];
-  const foreshadowingPaidOff = blueprint?.foreshadowingToPayoff ?? [];
 
   return {
-    id: `ch-${chapterNumber}`,
-    chapterNumber,
-    title,
-    content,
-    wordCount: content.split(/\s+/).length,
-    world: 'real',
-    summary: pick(summaryOptions, rng),
-    characters,
-    locations,
+    id: `ch-${chapterNumber}`, chapterNumber, title, content,
+    wordCount: content.split(/\s+/).length, world: 'real', summary, characters, locations,
     createdAt: new Date().toISOString(),
     newCharacters: hasAlex && chapterNumber <= 3 ? ['Alex'] : [],
     newLocations: [],
     skillsUsed: rng() > 0.5 ? ['Nightsight'] : [],
     itemsGained: [],
     plotThreadsAdvanced: blueprint?.mustAdvancePlots ?? ['plot-save-yuna', 'plot-reality-bleed'],
-    foreshadowingPlanted,
-    foreshadowingPaidOff,
-    emotionalTone: pick(realTones, rng),
-    arcPhase,
-    tensionLevel,
+    foreshadowingPlanted: blueprint?.foreshadowingToPlant ?? [],
+    foreshadowingPaidOff: blueprint?.foreshadowingToPayoff ?? [],
+    emotionalTone: pick(realTones, rng), arcPhase, tensionLevel,
     arcId: blueprint ? 'arc-main-progenitor' : undefined,
-    glossaryUpdates,
-    codexUpdates,
+    glossaryUpdates, codexUpdates,
   };
 }
