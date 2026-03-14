@@ -1470,6 +1470,116 @@ export function chooseWorld(
   return vrScore >= realScore ? 'vr' : 'real';
 }
 
+// ─── Suggested Scene Builder ──────────────────────────────────────────────────
+// Populates the blueprint's suggestedScenes field with scene type keys that
+// the chapter generator can use to select appropriate template pools.
+
+function buildSuggestedScenes(
+  world: 'vr' | 'real',
+  arcPhase: ArcPhase,
+  tensionTarget: number,
+  primaryFocus: string,
+  mcStage: ProgressionStage,
+  exploitDirective: string | null,
+  concealmentPressure: string | null,
+  rng: () => number,
+): string[] {
+  const scenes: string[] = [];
+
+  if (world === 'vr') {
+    // Always include at least one combat scene in VR
+    scenes.push('vr_combat');
+
+    // Arc phase drives scene selection
+    if (arcPhase === 'setup' || arcPhase === 'aftermath') {
+      scenes.push('vr_exploration');
+      if (rng() > 0.5) scenes.push('vr_quiet_moment');
+    } else if (arcPhase === 'rising' || arcPhase === 'complication') {
+      scenes.push('vr_exploration');
+      scenes.push('vr_lore');
+      if (rng() > 0.6) scenes.push('vr_npc_dialogue');
+    } else if (arcPhase === 'climax') {
+      scenes.push('vr_combat'); // Double combat for climax
+      scenes.push('vr_lore');
+    } else if (arcPhase === 'resolution') {
+      scenes.push('vr_lore');
+      scenes.push('vr_quiet_moment');
+    }
+
+    // Focus-driven additions
+    if (primaryFocus === 'lore') scenes.push('vr_lore');
+    if (primaryFocus === 'exploration') scenes.push('vr_exploration');
+    if (primaryFocus === 'training') scenes.push('vr_training');
+
+    // High tension adds more combat or danger
+    if (tensionTarget > 70 && rng() > 0.4) scenes.push('vr_combat');
+
+    // Exploit directive adds relevant scene
+    if (exploitDirective) scenes.push('vr_exploit_moment');
+
+    // Advanced progression stages unlock deeper scenes
+    if (['strategic_abuser', 'seasoned_survivor'].includes(mcStage)) {
+      if (rng() > 0.5) scenes.push('vr_system_interaction');
+    }
+  } else {
+    // Real world scenes
+
+    // Hospital is a core pillar of the real-world story
+    scenes.push('real_hospital');
+
+    // Arc phase drives scene selection
+    if (arcPhase === 'setup' || arcPhase === 'aftermath') {
+      scenes.push('real_daily_life');
+      if (rng() > 0.4) scenes.push('real_alex');
+    } else if (arcPhase === 'rising' || arcPhase === 'complication') {
+      scenes.push('real_alex');
+      scenes.push('real_reality_bleed');
+    } else if (arcPhase === 'climax') {
+      scenes.push('real_reality_bleed');
+      scenes.push('real_alex');
+      if (rng() > 0.5) scenes.push('real_investigation');
+    } else if (arcPhase === 'resolution') {
+      scenes.push('real_hospital');
+      if (rng() > 0.5) scenes.push('real_alex');
+    }
+
+    // Focus-driven additions
+    if (primaryFocus === 'character' || primaryFocus === 'emotional') {
+      scenes.push('real_alex');
+    }
+    if (primaryFocus === 'revelation' || primaryFocus === 'social') {
+      scenes.push('real_investigation');
+    }
+    if (primaryFocus === 'stealth') {
+      scenes.push('real_reality_bleed');
+    }
+
+    // Concealment pressure adds hiding/close-call scenes
+    if (concealmentPressure) scenes.push('real_concealment');
+
+    // High tension means reality is breaking down
+    if (tensionTarget > 60 && rng() > 0.3) scenes.push('real_reality_bleed');
+
+    // Advanced stages add paranoia and investigation scenes
+    if (['paranoid_hider', 'strategic_abuser', 'seasoned_survivor'].includes(mcStage)) {
+      if (rng() > 0.5) scenes.push('real_investigation');
+    }
+  }
+
+  // Deduplicate while preserving order (duplicates = weight, but we cap at 2)
+  const counts = new Map<string, number>();
+  const result: string[] = [];
+  for (const s of scenes) {
+    const c = counts.get(s) ?? 0;
+    if (c < 2) {
+      result.push(s);
+      counts.set(s, c + 1);
+    }
+  }
+
+  return result;
+}
+
 // ─── ChapterBlueprint Generation ─────────────────────────────────────────────
 
 const VR_FOCUS_OPTIONS = ['action', 'lore', 'exploration', 'training', 'mystery'] as const;
@@ -1715,7 +1825,7 @@ export function generateBlueprint(
     primaryFocus,
     secondaryFocus: pick(EMOTIONAL_TARGETS, rng),
     requiredPlotBeats: activePlots.slice(0, 1).map(p => p.nextBeat),
-    suggestedScenes: [],
+    suggestedScenes: buildSuggestedScenes(world, arcPhase, tensionTarget, primaryFocus, mcStage, exploitDirective, concealmentPressure, rng),
     charactersToInclude,
     locationsToUse,
     emotionalTarget: pick(EMOTIONAL_TARGETS, rng),

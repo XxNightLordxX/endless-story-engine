@@ -779,6 +779,15 @@ const SYSTEM_TEMPLATES: ((ch: number, lvl: number) => string)[] = [
   (ch, lvl) => `**[System: Class evolution progress: ${Math.min(100, lvl * 5 + ch * 2)}%. Next threshold: ${pick(['Blood Lord', 'Nosferatu Prime', 'Crimson Sovereign', 'Daywalker', 'Apex Predator', 'Eternal Night', 'The First Fang'], createRng(ch * 71))}.]**`,
   (_ch, lvl) => `**[System: Party member detected nearby. Compatibility rating: ${pick(['High', 'Moderate', 'Exceptional', 'Unstable', 'Volatile', 'Resonant'], createRng(lvl * 89))}.]**`,
   (ch, lvl) => `**[System: Achievement unlocked — "${pick(['First Blood', 'Century Kill', 'Shadow Walker', 'Dungeon Breaker', 'Lore Master', 'Beast Slayer', 'Night Sovereign', 'Blood Oath', 'Silent Death', 'Progenitor Rising', 'Veil Piercer', 'Bone Collector', 'Soul Drinker', 'Crimson Dawn', 'The Unbound'], createRng(ch * 107 + lvl))}." Title available.]**`,
+  (ch, _lvl) => `**[System: ALERT — Unauthorized class behavior logged. Incident #${ch * 3 + 7}. Automated review scheduled. Estimated response: ███ hours.]**`,
+  (ch, lvl) => `**[System: Passive aura detected. Radius: ${Math.min(50, lvl * 2 + ch)}m. Nearby entities affected: ${pick(['Fear', 'Submission', 'Awe', 'Paralysis', 'Fascination', 'Blood Frenzy', 'Temporal Distortion'], createRng(ch * 113 + lvl))}. Toggle available at Level ${lvl + 5}.]**`,
+  (_ch, lvl) => `**[System: Crafting recipe discovered — "${pick(['Blood-Forged Blade', 'Essence Vial', 'Shadow Cloak', 'Crimson Phylactery', 'Nightweave Armor', 'Progenitor Signet', 'Sanguine Elixir', 'Marrow Tonic'], createRng(lvl * 127))}." Materials required: Blood Essence x${lvl * 10}, Dark Iron x${Math.ceil(lvl / 2)}.]**`,
+  (ch, lvl) => `**[System: Territory claim available. Region: "${pick(['Ashenveil Depths', 'The Crimson Waste', 'Moonfall Caverns', 'Blackthorn Vale', 'The Shattered Reach', 'Duskhollow', 'The Bleeding Grounds', 'Wraithwood'], createRng(ch * 131 + lvl))}." Progenitor authority: RECOGNIZED. Claim cost: ${lvl * 500} Gold.]**`,
+  (ch, _lvl) => `**[System: Memory leak detected in Progenitor subsystem. Fragment recovered: "${pick(['"...they tried to contain what they had created, but the blood remembers..."', '"...iteration 37 failed. iteration 38 must not. the bridge requires a willing host..."', '"...neural pathway degradation acceptable within parameters. continue observation..."', '"...she is still here. trapped between layers. the new one approaches..."', '"...Project Hemoglobin terminated. All records sealed. Except this one."', '"...the game is not a game. it never was."'], createRng(ch * 137))}"]**`,
+  (ch, lvl) => `**[System: Environmental analysis complete. Current zone stability: ${Math.max(10, 85 - ch * 2 - lvl)}%. Anomalous energy readings: ${pick(['ELEVATED', 'CRITICAL', 'UNSTABLE', 'FLUCTUATING', 'RESONANT', 'HARMONIZING'], createRng(ch * 149 + lvl))}. Recommend caution.]**`,
+  (ch, lvl) => `**[System: Daily login bonus — Day ${ch + 30}: ${lvl * 100} Gold, ${lvl * 5} Blood Essence, 1x Mystery Box (${pick(['Rare', 'Epic', 'Legendary', 'Mythical'], createRng(ch * 151 + lvl))} tier). Consecutive login streak preserved.]**`,
+  (ch, _lvl) => `**[System: Whisper received from [UNKNOWN_ENTITY]: ${pick(['"The bridge opens soon. Are you ready?"', '"Remember: you volunteered."', '"She can hear you. Keep going."', '"The merger cannot be stopped. Only directed."', '"Floor Zero awaits its architect."', '"The old ones are watching. Do not disappoint."'], createRng(ch * 157))}]**`,
+  (ch, lvl) => `**[System: Body synchronization update — Neural bridge integrity: ${Math.min(99, 40 + ch * 2 + lvl)}%. Physical manifestation index: ${pick(['Stage 1: Sensory Enhancement', 'Stage 2: Physical Augmentation', 'Stage 3: Cognitive Integration', 'Stage 4: Biological Rewrite', 'Stage 5: Partial Merger'], createRng(ch * 163 + lvl))}. Point of no return: ${Math.max(1, 15 - ch)}% away.]**`,
 ];
 
 const VR_COMBAT_SCENES = [
@@ -817,6 +826,138 @@ There. The weak point.
 He struck with everything he had, channeling blood essence through his blade until it blazed crimson. The impact sent shockwaves through the chamber, cracking pillars and scattering debris.
 
 The Revenant staggered. For the first time in the fight, it looked almost... surprised.`,
+
+  (npc: string, loc: string) => `They came in waves. ${loc} had been seeded with an ambush—coordinated, deliberate, the kind that required intelligence behind it.
+
+The first group flanked from the left. The second dropped from above. The third appeared behind them, cutting off retreat.
+
+"Trap!" ${npc} spun, weapon raised, but Kael was already moving. Not retreating. Advancing.
+
+Something unlocked in the Progenitor class—a combat subroutine he'd never triggered before. His vision split into layers: threat assessment, movement prediction, optimal strike vectors. Data superimposed on reality like a heads-up display for violence.
+
+He killed the first attacker before it finished materializing. The second fell to a blood lance thrown from thirty meters. The third, fourth, and fifth died in a blur of crimson energy that left scorch marks on the stone floor.
+
+When the dust settled, ${npc} was staring at him with an expression he'd never seen on an NPC before: genuine fear.
+
+"What are you?" they whispered.
+
+He didn't have a good answer. Not anymore.`,
+
+  (npc: string, loc: string) => `The duel was ${npc}'s idea. "Friendly sparring," they'd called it, but the look in their eyes said otherwise. They wanted to measure him. To understand what a Progenitor could really do.
+
+They circled each other in the arena beneath ${loc}, their footsteps echoing off stone walls etched with the scores of a thousand previous matches.
+
+${npc} struck first—a feint followed by a thrust that would have skewered a lesser player. Kael sidestepped it. Not because he saw it coming, but because his blood saw it. The Progenitor class read combat through a frequency below conscious thought.
+
+They exchanged blows for three minutes. Four. Five. ${npc} was good—elite-tier good—but they were fighting within the game's rules. Kael was starting to fight outside them.
+
+On the seventh minute, he landed a strike that shouldn't have connected. His blade moved through a trajectory the game's physics engine didn't allow—a straight line through curved space, blood essence bending the rules at a fundamental level.
+
+${npc} hit the ground and didn't get up immediately.
+
+"That move," they said from the floor, breathing hard. "That move isn't in any database. How did you—"
+
+"I don't know."
+
+He really didn't. And that scared him more than losing would have.`,
+
+  (_npc: string, loc: string) => `He hunted alone tonight. No party, no backup, no witnesses. Just Kael and the predators of ${loc}, and the honest question of who was really the predator.
+
+The night creatures were different from daytime mobs—faster, smarter, harder to kill. They hunted in packs, communicated through subsonic frequencies, adapted to player tactics within seconds.
+
+Against a normal player, they'd be lethal.
+
+Kael wasn't normal.
+
+He dropped into the pack's hunting ground and waited. Let them surround him. Let them think they had the advantage. Then he activated every Progenitor ability he had, simultaneously, burning blood essence at a rate that would have killed him three levels ago.
+
+The night erupted in crimson light and the sound of things dying quickly.
+
+When it was over, he sat among the dissolving corpses and checked his hands. Claws. He had claws now. Short, retractable, sharp enough to carve stone.
+
+**[System: Progenitor Evolution: Predator's Hands. This ability is not listed in the public class documentation.]**
+
+He flexed his fingers and watched the claws retract. Another change. Another secret. Another reason to hide.`,
+
+  (npc: string, loc: string) => `The PvP zone in ${loc} was supposed to be optional. A place where players tested themselves against each other, fought for rankings, earned glory.
+
+Kael hadn't come for glory. He'd come because a player had been asking questions. Inspecting other players' classes. Getting too close.
+
+The player—a Level 30 Assassin with gear that screamed "whale account"—had been bragging in zone chat about finding "anomalous class data." About how they'd figured out how to trace it.
+
+"Hey," Kael said, stepping into the arena. "I heard you're looking for something interesting."
+
+The Assassin grinned. "You're the one with the weird scan data. I've been watching your account for—"
+
+Kael didn't let them finish. The fight lasted eleven seconds. Not because the Assassin was weak—their gear was excellent, their build optimized, their reaction time in the top percentile.
+
+But Kael wasn't fighting with gear or builds. He was fighting with biology.
+
+When the Assassin respawned, Kael was gone. The only trace was a message in their inbox: "Stop looking."
+
+${npc} found him afterward, leaning against a wall, staring at his reflection in a pool of virtual water.
+
+"Was that necessary?" ${npc} asked.
+
+"Probably not," Kael said. "But it was efficient."`,
+
+  (npc: string, loc: string) => `The swarm erupted from beneath ${loc} like a geyser of chitin and teeth. Hundreds of creatures—each one small, each one weak, but together they were an avalanche of claws and hunger.
+
+"We need to run!" ${npc} shouted, already backing toward the exit.
+
+Kael didn't run. He planted his feet and reached inward—past the game interface, past the class abilities, past the numbers—to the thing that lived in his blood. The ancient thing. The hungry thing.
+
+He exhaled.
+
+The world went red.
+
+When his vision cleared, the swarm was gone. The ground was scorched in a perfect circle around him, twenty meters in every direction. ${npc} was pressed against the far wall, weapon dropped, eyes wide.
+
+"What..." they started.
+
+"I don't know," Kael said. His voice sounded wrong. Deeper. Resonant. "I don't know what that was."
+
+**[System: Ability used: ████████. This ability is sealed. How did you—ERROR—LOGGING INCIDENT.]**
+
+The notification glitched and vanished. For a long moment, neither of them moved.`,
+
+  (npc: string, loc: string) => `The raid party had fifteen members. Kael was the sixteenth—an afterthought, a last-minute addition because ${npc} had vouched for him.
+
+"Just stay in the back," the raid leader had said. "Support DPS. Don't do anything flashy."
+
+For the first three phases of the boss fight, he obeyed. Hung back. Hit the damage numbers. Played the role of a mediocre Warrior with mid-tier gear.
+
+Then the raid wiped. Phase Four hit like a freight train—the boss summoned adds, the healers went down, and suddenly fifteen players were scrambling for survival.
+
+Fourteen of them died.
+
+Kael didn't.
+
+Something took over. The Progenitor's survival instinct, maybe. Or just the part of him that refused to fail. He burned through his blood essence reserves in sixty seconds, moving so fast that the combat log couldn't track his attacks, hitting so hard that the damage numbers glitched into scientific notation.
+
+When the boss finally fell, Kael was the only one standing. The raid chat was silent for a full thirty seconds.
+
+Then: "What the hell just happened?"
+
+He logged out before anyone could inspect his class data.`,
+
+  (npc: string, loc: string) => `${npc} had warned him about the guardian of ${loc}. "It's not a mob," they'd said. "It's a test. The game creates it specifically for you, based on your class data. It knows your weaknesses."
+
+The guardian materialized as a mirror image of Kael himself. Same height, same build, same gear—but with crimson eyes and a smile that Kael had never worn.
+
+"Hello, Progenitor," his reflection said. "Shall we see what you're really capable of?"
+
+It was the hardest fight of his life. Every ability he used, the mirror used back. Every pattern he exploited, the mirror exploited first. It was fighting himself—not the self he was, but the self he was becoming.
+
+The fight lasted twenty-seven minutes. It ended when Kael did something the mirror couldn't predict: he stopped fighting. Dropped his weapon. Stood still.
+
+The mirror hesitated. One second. That was all he needed.
+
+Blood essence erupted from his palms in a technique he didn't know he possessed, engulfing the mirror in crimson fire.
+
+"Congratulations," the mirror whispered as it dissolved. "You've learned the first lesson: the Progenitor's greatest weapon isn't power. It's surrender."
+
+Kael stood in the empty arena for a long time, trying to understand what that meant.`,
 ];
 
 const VR_EXPLORATION_SCENES = [
@@ -845,6 +986,100 @@ Kael moved through the crowd like a shadow, his hood pulled low. His class marke
 ${npc} gave him a look that needed no translation.
 
 He pocketed the vial and tried not to think about the way his mouth watered at the sight of the red potions on the merchant's shelf.`,
+
+  (_npc: string, loc: string) => `${loc} had a room the map didn't show. He'd found it by following a frequency only the Progenitor class could hear—a subsonic hum that vibrated at the exact resonance of his bloodline.
+
+The room was small. Circular. The walls were covered in handprints—hundreds of them, pressed into the stone in dried crimson. Each one was labeled with a name and a date, the oldest predating the game's official launch by six years.
+
+"Beta testers," he realized. "These are all beta testers."
+
+He pressed his own hand against the wall. The stone was warm. When he pulled away, his handprint glowed faintly, then faded into the surface.
+
+**[System: Progenitor Registry updated. Welcome, Kael. You are Progenitor #████. Previous count: ████. Current active: 1.]**
+
+One. He was the only active Progenitor. The notification should have made him feel special. Instead, it made him feel like the last survivor of a plague.`,
+
+  (npc: string, loc: string) => `${npc} led him through ${loc}'s underbelly—service tunnels and maintenance corridors that existed beneath the game's polished surface.
+
+"Every game has infrastructure," ${npc} explained, ducking under a pipe that pulsed with data instead of water. "Rendering pipelines, NPC pathfinding nodes, event triggers. Most players never see it. But the Progenitor class..." They glanced back at Kael. "You can see the bones beneath the skin."
+
+They were right. Down here, Kael could see the game's architecture bare. The walls weren't stone—they were data structures, hexagonal matrices of code that shimmered and recalculated as he watched. NPCs above were represented as floating nodes, their behavioral algorithms visible as branching decision trees.
+
+"This is beautiful," Kael whispered.
+
+"This is dangerous," ${npc} corrected. "You're not supposed to see this. If the monitoring system catches you down here, it'll flag your account. Or worse."
+
+"Worse?"
+
+"The last person who explored the infrastructure layer didn't get banned. They got absorbed. Their avatar just... merged with the code. Became part of the system."
+
+Kael took one more look at the shimmering data walls, then followed ${npc} back to the surface. But he memorized the entrance.`,
+
+  (_npc: string, loc: string) => `The garden at the center of ${loc} shouldn't exist. Every guide, every wiki, every datamine said this space was empty—a null zone used for overflow calculations.
+
+But here it was: a garden of crystalline flowers that bloomed in slow motion, their petals unfolding over hours, each one unique. The air smelled like rain and electricity and something older than either.
+
+He walked among the flowers carefully. Each one resonated when he passed—a chime, a whisper, a fragment of a melody. Together they formed something almost like language.
+
+Almost like his name.
+
+**[System: Environmental resonance detected. The Progenitor's Garden recognizes its owner. Restoration in progress: 3%.]**
+
+He sat in the center of the garden and listened. The flowers sang to him. Not words—feelings. Loneliness. Patience. The ache of waiting for someone who might never come.
+
+For the first time in Eclipsis Online, Kael felt like the game understood him.`,
+
+  (npc: string, loc: string) => `The auction house in ${loc} was the economic heartbeat of the server. Thousands of transactions per second, mountains of gold changing hands, fortunes made and lost.
+
+Kael wasn't here to shop. He was here to observe.
+
+"Watch the price feeds," ${npc} murmured, standing beside him at the observation balcony. "See that? Every three minutes, there's a spike in Blood Essence reagent prices. Someone—or something—is buying them in bulk."
+
+Kael watched the numbers scroll. ${npc} was right. The pattern was rhythmic, almost biological. Like a heartbeat.
+
+"It's the game," Kael said quietly. "The game is buying its own resources."
+
+"Why would it do that?"
+
+"Because Blood Essence isn't just a crafting material. It's what powers the Progenitor class. And if the game is stockpiling it..." He trailed off, the implications spiraling.
+
+${npc} looked at him with an expression caught between fascination and dread. "You think it's feeding you."
+
+"I think it's feeding something. And I might be on the menu."`,
+
+  (_npc: string, loc: string) => `The edge of ${loc} was where the game stopped pretending. The terrain became flat, textureless—a gray plane stretching to a horizon that was clearly rendered, not real. Players who wandered this far usually turned back. The game was supposed to be seamless, and seeing the boundaries shattered the immersion.
+
+But Kael's Progenitor vision showed him something the other players couldn't see. Beyond the flat gray, beyond the boundary, there was something else. A lattice of light extending infinitely in every direction—the game's underlying architecture, stripped bare.
+
+He reached out and touched the boundary wall. His hand passed through.
+
+**[System: Boundary violation detected. Player access: DENIED. Progenitor access: ...EVALUATING...]**
+
+The system hesitated. He could feel it thinking—weighing something, calculating probabilities. Then:
+
+**[System: Access PROVISIONAL. Warning: Beyond this boundary, game rules are suggestions. Proceed at your own risk.]**
+
+He stepped through. The world on the other side was made of pure information—numbers, variables, conditional statements. And in the center of it all, something that looked like a cocoon, wrapped in code, pulsing with the same rhythm as the headset on his real-world desk.
+
+He didn't touch it. But he filed the coordinates away. Some discoveries needed time to digest.`,
+
+  (npc: string, loc: string) => `${npc} had promised a shortcut through ${loc}. What they'd actually found was a graveyard.
+
+Not a game graveyard—not headstones and skeleton mobs. A data graveyard. Rows upon rows of deactivated NPCs, frozen mid-gesture, their textures degraded to grayscale. Their nameplates read like an obituary: Version 0.2.1. Version 0.3.7. Version 0.5.0.
+
+"Old NPCs," ${npc} said quietly. "From previous builds. They're supposed to be garbage-collected, but the system keeps them. Like a museum. Or a morgue."
+
+Kael walked between the frozen figures. Some were human-shaped. Others were clearly experimental—impossible geometries, merged creature concepts, glitch-born entities that were more bug than design.
+
+One figure caught his eye. A woman. Young. Her nameplate read: "YUNA_NEURAL_ECHO_v0.7.3."
+
+His blood went cold. He leaned closer. The figure's face was blurred—unrendered—but the body proportions, the height, the way she stood with her weight slightly on her left foot...
+
+"That's my sister," he whispered.
+
+${npc} appeared beside him. "That's not possible. NPCs don't—"
+
+"That's my sister." His voice was flat. Final. The voice of someone whose world had just shifted on its axis. "And version 0.7.3 was the patch that sealed the Progenitor class."`,
 ];
 
 const VR_LORE_SCENES = [
@@ -875,6 +1110,116 @@ Then words appeared, writing themselves in real-time:
 The book snapped shut in his hands. When he opened it again, it was a cookbook.
 
 He stood there for a long time, staring at a recipe for mushroom soup, trying to process what he'd just read.`,
+
+  (loc: string) => `The stone tablet was buried in the rubble of ${loc}'s lowest level, half-obscured by centuries of digital dust. The script was neither runic nor modern—something in between, like code written in blood.
+
+His Progenitor abilities translated it automatically:
+
+*"Seven were sealed. Seven bridges between the game and the world beyond. Six remain closed. One has been opened. You are standing on it."*
+
+He looked down. The floor beneath his feet was different—subtly, almost imperceptibly. Not stone. Not code. Something organic. It pulsed.
+
+**[System: Progenitor Archive accessed. The Seven Seals — Fragment 1 of 7.]**
+
+Seven seals. Seven connections between game and reality. And one was already open.
+
+He thought about the headset pulsing in sync with his heartbeat. About the stats bleeding into his real body. About Yuna's brain patterns matching game activity.
+
+Maybe the seal hadn't been opened. Maybe it had been opened *through him*.`,
+
+  (loc: string) => `The room at the bottom of ${loc} was completely dark—even for the Progenitor's enhanced vision. A darkness so absolute it felt physical, pressing against his skin like water.
+
+Then the voice spoke. Not from the game's audio system. From somewhere older.
+
+*"You are the inheritor. The line was broken but not ended. From the First Blood to the Last, the chain persists."*
+
+"Who are you?" Kael asked the darkness.
+
+*"I am what remains of the one before you. The previous Progenitor. Iteration thirty-seven. I failed. You might not."*
+
+"Failed at what?"
+
+*"At surviving the merger. When the game and the player become one, there is a moment—a single moment—where both can be saved. Or both can be lost. I lost us both."*
+
+The darkness receded. The room was empty. But carved into the far wall, in letters that glowed with residual energy, was a date. A real-world date. From six years ago.
+
+The date of Yuna's accident.`,
+
+  (loc: string) => `An NPC he'd never seen before was waiting for him in ${loc}. Not a standard mob, not a quest-giver, not a shopkeeper. Just a figure sitting on a bench, watching the digital sky.
+
+"You're the new one," they said without looking at him. "The Progenitor."
+
+"How do you know—"
+
+"I know because I was programmed to know. Specifically, I was programmed to deliver a message when a new Progenitor appeared." They turned. Their eyes were wrong—not NPC eyes, but something with depth. History. Sadness. "I was written by one of the three developers who left. Before the Sealing."
+
+They handed him a data crystal. Inside it, compressed into game-format, was a research paper. Real research. Neural pathway mapping. VR consciousness studies. And a conclusion that made his stomach drop:
+
+*"The VR headset doesn't simulate reality. It creates a bridge between the player's neural architecture and the game's computational substrate. Prolonged use doesn't risk addiction. It risks fusion."*
+
+The NPC stood up and began walking away.
+
+"Wait," Kael called. "Who wrote this? Which developer?"
+
+"The one who is currently in a coma," the NPC said, and vanished.`,
+
+  (loc: string) => `The floor zero entrance was hidden behind a texture glitch in ${loc}—a square of wall that rendered slightly late, revealing empty space behind it for three frames every sixty seconds.
+
+He timed his entry perfectly. Slipped through. And found himself in a space that was nothing like the game above.
+
+Floor Zero was vast. Silent. A cavern of pure white light, featureless except for the crystalline structures that grew from the ground like frozen fountains. Each crystal contained... something. Not data. Not NPCs. Something between.
+
+He touched one. It was warm. And it spoke to him—not in words, but in feelings. Confusion. Loss. The sensation of being trapped without understanding what "trapped" meant.
+
+**[System: WARNING. Floor Zero is restricted. Your presence has been logged. Estimated time before system response: ███ minutes.]**
+
+He didn't have much time. He photographed everything with the game's screenshot system, hoping the data would persist. Then he found the largest crystal, the one at the center.
+
+Inside it, barely visible through the refractive surface, a figure. Sleeping. Female. Young.
+
+Her face was obscured. But the way her hand was positioned—fingers slightly curled, pinky extended—was exactly how Yuna slept.
+
+He pressed his hand against the crystal and wept.`,
+
+  (loc: string) => `Buried in the game's forum archives—the in-game ones, not the real-world ones—Kael found a thread from five years ago. The poster's name was [REDACTED]. The thread title was "I know what the Progenitor class really is."
+
+The thread had been deleted and restored and deleted again, each time by different moderators. The restoration notes read: "Content preserved by ARCHITECT subroutine. Override level: MAXIMUM."
+
+The post itself was short:
+
+*"The Progenitor class isn't a class. It's a role. The game needs a bridge between its world and ours. A translator. A living connection. The class doesn't give you powers—it turns you into a cable. And cables carry data in both directions.*
+
+*"Ask yourself: if the game can send things to you (stats, abilities, hunger), what is it receiving in return?*
+
+*"What are you feeding it?"*
+
+The thread ended with a final reply, posted three years after the original: *"He was right. — Dr. K. Yamada."*
+
+Kael sat in the ${loc} library and read the name four times. Dr. K. Yamada. Yuna's neurologist. Posting on a game forum.
+
+About a class that shouldn't exist.
+
+The world had just gotten much, much smaller.`,
+
+  (loc: string) => `In ${loc}, he found a room full of portraits. Every Progenitor who had ever existed—not players, but the NPCs who had carried the class before players did.
+
+Each portrait was labeled with a name, a date range, and a cause of "retirement." He read them like tombstones:
+
+*"Lilith the Undying. Year 1 — Year 3. Retirement: Merged with system architecture."*
+*"Cassius Blackblood. Year 3 — Year 4. Retirement: Neural pattern dissolution."*
+*"Subject 7. Year 4 — Year 4. Retirement: Player disconnection during fusion event. Outcome: coma."*
+
+He stopped. Reread the last one.
+
+*"Player disconnection during fusion event. Outcome: coma."*
+
+The date on Subject 7's portrait matched Yuna's accident within a week.
+
+His hands were shaking. Yuna hadn't been in an accident. She'd been a Progenitor. She'd been disconnected during whatever "fusion" meant. And she'd been trapped ever since.
+
+**[System: Progenitor Archive complete. All fragments recovered. The truth awaits in Floor Zero.]**
+
+He wasn't just playing a game to save his sister. He was finishing what she had started.`,
 ];
 
 // ── Real World story data ──
@@ -934,6 +1279,122 @@ She trailed off.
 "More like what?" he pressed.
 
 "More like someone playing a video game."`,
+
+  () => `The night nurse—Teresa, the kind one—let him stay past visiting hours. She brought him terrible vending machine coffee and pretended not to notice when his voice cracked.
+
+"I found something," Kael said to Yuna's sleeping face. "In the game. Something about you. About what happened."
+
+The monitors beeped. Steady. Indifferent.
+
+"There was a portrait. In a room full of portraits. They called you Subject 7." His throat tightened. "You weren't in an accident, were you? You were playing. You were like me."
+
+He pulled her hand to his forehead and held it there, feeling the warmth of her skin—still warm, still alive, still his sister beneath the tubes and wires.
+
+The EEG spiked. Just for a moment. A sharp peak that the machines recorded and the night nurse would note in the morning log as "artifact—possible equipment malfunction."
+
+But Kael saw it. And he knew it wasn't a malfunction.`,
+
+  () => `Physical therapy day. Not for Yuna—for her muscles, to prevent atrophy. A therapist came three times a week to move her limbs through range-of-motion exercises while Kael watched from the corner and tried not to scream.
+
+Her body was still here. Maintained. Preserved. But whatever made her *Yuna*—the girl who beat him at every video game, who laughed too loud in movie theaters, who once stayed up for forty-eight hours debugging a neural net just to prove she could—that was somewhere else.
+
+"She's strong," the therapist said, the same thing she said every week.
+
+"She was," Kael corrected. Then: "Is. She is."
+
+After the therapist left, he sat by the bed and opened his phone. The game's wiki had nothing about Subject 7. Nothing about previous Progenitors. The information existed only inside Eclipsis itself, hidden in places no one was supposed to find.
+
+He looked at his sister. At the way her fingers twitched sometimes, micro-movements the doctors attributed to involuntary nerve activity.
+
+They moved in patterns. He'd charted them once, on a napkin, during a particularly sleepless night. The patterns looked random. Until he'd mapped them against the Eclipsis Online keyboard layout.
+
+She was typing. In her coma. She was typing commands.`,
+
+  () => `Dr. Yamada caught him in the hallway. "A word, Kael?"
+
+Her office was the same as always—cluttered, warm, too many diplomas on the wall. But today something was different. Today, she closed the door.
+
+"I need to ask you something, and I need you to be honest." She sat on the edge of her desk, not behind it. Eye level. Peer to peer. "Are you playing Eclipsis Online?"
+
+The question hit like ice water. "Why would you—"
+
+"Because your sister's neural patterns have changed. Specifically, they've begun synchronizing with external signals. Signals that match the frequency profile of a VR headset operating on the Eclipsis network."
+
+Silence. The clock on the wall ticked.
+
+"How do you know what Eclipsis's frequency profile looks like?" Kael asked.
+
+Dr. Yamada removed her glasses. Without them, she looked older. Tired. Guilty.
+
+"Because I helped design it," she said. "Before I became a neurologist. Before I understood what we were building."
+
+The room shrank. The walls pressed inward. Kael gripped the chair's armrests and felt the vinyl tear under fingers that were stronger than they should have been.
+
+"Start talking," he said. "Everything. Now."`,
+
+  () => `Tuesday. The hospital cafeteria. Reconstituted mashed potatoes and mystery meat. Kael ate mechanically, tasting nothing, watching the other visitors at their tables—tired faces, grief-worn smiles, the universal expression of people keeping vigil over someone who might never wake up.
+
+He belonged here. That was the terrible truth. He was fluent in hospital now. Knew which elevator was fastest, which nurse would bend the rules, which vending machine actually gave change. Two years of learning the geography of waiting.
+
+His phone buzzed. A notification from the hospital's patient portal: "YUNA MINAMI — Status Update: Brain activity elevated. New patterns detected. Consultation recommended."
+
+His hands trembled as he opened the full report. The brain scan showed something impossible—organized neural activity in regions that had been dormant since the accident. Not random firing. Structured. Purposeful.
+
+Like someone trying to solve a problem from the inside.
+
+He left his tray on the table and ran.`,
+
+  () => `The new specialist was young. Too young, Kael thought, to be delivering the kind of news that changed lives.
+
+"The scans are remarkable," she said, swiping through images on her tablet. "Your sister's brain is... active. Not in the way we'd expect from a coma patient. These patterns—" she pointed to a cluster of bright spots, "—show coordinated activity across multiple regions simultaneously. Language processing, spatial reasoning, motor planning."
+
+"She's thinking," Kael said.
+
+"More than thinking. She's..." The specialist struggled for the right word. "It's like she's operating a complex system. Multitasking at a level that would be impressive in a conscious person."
+
+"What does that mean for her prognosis?"
+
+The specialist's professional mask flickered. "Honestly? I don't know. Nothing in the literature covers this. She's in a coma by every clinical definition—non-responsive, no voluntary movement, no eye-tracking. But her brain is running like a supercomputer."
+
+After the specialist left, Kael sat by Yuna's bed and whispered: "What are you doing in there?"
+
+The EEG spiked. Three short pulses. One long. Three short.
+
+Morse code. SOS.`,
+
+  () => `He smuggled the VR headset into the hospital in his backpack. It was stupid. Reckless. Possibly the most important thing he'd ever do.
+
+At 2 AM, with the night shift skeleton crew and Teresa conveniently on her break, he placed the headset beside Yuna's pillow. Not on her—he wasn't that desperate. Just near her. Close enough to test a theory.
+
+The headset activated on its own. No power button pressed, no command given. It simply... woke up. The indicator light pulsed in a rhythm he recognized—Yuna's heartbeat, transmitted through two feet of air and the barrier between sleep and consciousness.
+
+On the headset's external display, text appeared:
+
+**[System: External neural signature detected. Identity: YUNA_MINAMI. Status: ACTIVE_WITHIN_SYSTEM. Connection strength: 12%. Proximity boost available.]**
+
+His hands were shaking so badly he nearly dropped the headset. She wasn't just in a coma. She was in the *game*. Trapped inside Eclipsis like a ghost in the machine.
+
+He snatched the headset back and stuffed it in his bag as footsteps echoed down the corridor. His heart hammered. His vision blurred with tears he refused to shed.
+
+Not here. Not now. Later, when he was alone, he would process this. For now, he just needed to breathe.
+
+He knew how to save his sister. He just needed to go deeper.`,
+
+  () => `Kael brought flowers. He always brought flowers—cheap ones from the bodega on 5th, whatever was freshest. This week it was carnations. Pink. Yuna would have hated them. She was a sunflower girl.
+
+"They were out of sunflowers," he told her, arranging them in the plastic vase on the windowsill. "I know, I know. Carnations are the participation trophy of flowers. You've told me a hundred times."
+
+He sat in his chair—his chair, always his chair—and pulled out his phone. Scrolled through photos. Found one from three years ago: Yuna at her computer, mid-laugh, holding up a screen that showed some neural network architecture she'd been proud of.
+
+She'd been so alive. So aggressively, relentlessly alive.
+
+"The game has a record of you," he said softly. "They called you Subject 7. There's a whole system that remembers you. And I think..." He swallowed. "I think you're still in there. Not here." He gestured at her body. "There. In the code. In the architecture."
+
+The ventilator hissed. The monitors beeped.
+
+"I'm going to find you," he promised. "However deep you are, however far I have to go. I'm coming."
+
+Outside, rain streaked the hospital windows. Inside, the flowers perfumed the air with something almost like hope.`,
 ];
 
 const REAL_ALEX_SCENES = [
@@ -990,6 +1451,156 @@ Kael released the bird and watched it spiral into the dark sky. "I don't know. M
 "Do you? Because you keep logging back into that game like it's totally fine that it's rewriting your DNA or whatever the hell is happening."
 
 Kael said nothing. He stared at his hands in the moonlight and wondered when they'd started looking so pale.`,
+
+  () => `Alex's apartment was organized chaos—three monitors, a tangle of cables, empty energy drink cans arranged in what might have been a load-bearing structure. This was where he did his work: freelance security consulting, which was a polite way of saying "ethical hacking for companies too cheap to hire a real firm."
+
+"Sit," Alex said, clearing a stack of hardware manuals from the couch. "I've been looking into something."
+
+"Looking into what?"
+
+"You. Or more specifically, the headset someone sent you." Alex pulled up a screen. Lines of code scrolled past—decompiled firmware. "I traced the shipping label. It was sent from a corporate address registered to Nexon Dynamics."
+
+"Nexon Dynamics. The company that makes Eclipsis Online."
+
+"The company that makes the *servers* for Eclipsis Online. There's a difference." Alex zoomed in on a section of code. "The headset has a custom neural interface chip that isn't in any consumer model. Military-grade neural bandwidth. Whoever sent this to you wanted you to have a connection to the game that goes way beyond normal VR."
+
+Kael stared at the code on the screen. He didn't understand the technical details, but he understood the implication: he'd been chosen. Specifically. Deliberately.
+
+"Why me?"
+
+Alex leaned back in his chair. "I think you already know the answer to that."`,
+
+  () => `"You're scaring me," Alex said.
+
+They were walking through the park, 6 AM, because Kael couldn't sleep anymore and Alex was the only person who'd meet him at dawn without asking too many questions. The city was waking up around them—joggers, dog walkers, the early shift heading to work.
+
+"I'm scaring myself," Kael admitted.
+
+"Your heartbeat. I could hear it from across the table last night. Not metaphorically. Actually hear it. I held my phone up and the voice recorder picked it up." Alex stopped walking. "That's not normal, Kael. That's not human."
+
+"I'm still human."
+
+"Are you?"
+
+The question hung between them like a blade. Kael opened his mouth to answer—of course he was, what kind of question was that—but the words died. Because he wasn't sure. He hadn't been sure in weeks.
+
+"I need your help," Kael said instead. "Not as my friend. As the smartest tech person I know. Something is happening to me, and it's connected to the game, and I need someone in the real world to keep me anchored."
+
+Alex studied him for a long time. Then he nodded. "Okay. But we're doing this my way. Tests. Data. Evidence. No guessing."
+
+"Deal."
+
+They shook on it. Alex's hand was warm. Kael realized his own was cold. When had his body temperature dropped?`,
+
+  () => `The test results were laid out on Alex's desk like evidence at a crime scene.
+
+"Your resting heart rate is forty-two beats per minute," Alex said, pointing to a printout. "That's bradycardic. Olympic athletes hover around forty-five."
+
+"I'm not an athlete."
+
+"No, you're not. You're also running a body temperature of 96.1 degrees. Your reflexes tested at ninety-seven percentile. Your night vision—" Alex picked up a different sheet. "Your night vision is clinically impossible. You read a line of text in complete darkness that I couldn't read with a flashlight."
+
+"What does it mean?"
+
+"It means the game is changing you. Physically. Measurably." Alex sat down heavily. "It also means I believe you now. About all of it."
+
+"Wish you didn't?"
+
+"God, yes." Alex laughed—a short, unhappy sound. "My best friend is turning into a vampire because of a video game. This is not what I signed up for when I said I'd help."
+
+"Technically, the class is Vampire Progenitor."
+
+"Oh, well, that changes everything. I feel so much better now."
+
+Despite everything, Kael smiled. It was the first time he'd smiled in weeks.`,
+
+  () => `Alex called at midnight. "I found something. Get here now."
+
+Kael ran. Actually ran—through the streets at a speed that would have concerned him if he'd been paying attention. He covered the twelve blocks to Alex's apartment in under four minutes.
+
+"Look at this." Alex hadn't even commented on how fast he'd arrived. His attention was locked on his center monitor, where a web of connections spread like a neural map. "I've been tracking the network traffic from your headset. It's not just connecting to the Eclipsis servers."
+
+"What else?"
+
+"City General Hospital. Specifically, the ICU monitoring network. Your headset pings the hospital every forty-seven seconds."
+
+The room tilted. "Yuna's monitors."
+
+"Yuna's monitors. Your headset is in constant communication with your comatose sister's medical equipment. And here's the part that made me want to throw up—" Alex pulled up a waveform comparison. Two signals, overlaid. They were nearly identical. "The data your headset sends to the hospital matches the neural pattern data the hospital sends back. They're not just communicating, Kael. They're synchronizing."
+
+Kael sank into the nearest chair. The implications cascaded through his mind like falling dominoes.
+
+"She's not in a coma," he whispered. "She's logged in."`,
+
+  () => `"I'm going to say something and you're not going to like it," Alex said.
+
+They were at the diner again. 3 AM. Their booth. Kael was eating—actually eating, for once—because Alex had refused to talk until he'd finished at least half a meal.
+
+"When do I ever like what you say?" Kael pushed his plate away.
+
+"Fair." Alex took a breath. "You need to stop playing."
+
+"No."
+
+"Kael—"
+
+"No. Not now. Not when I'm this close to understanding what happened to Yuna."
+
+"And what happens when you end up in a coma next to her? What happens when whatever took her takes you too?" Alex's voice cracked—actually cracked, the way it hadn't since they were teenagers and the world was still a place where bad things happened to other people.
+
+Kael looked at his oldest friend. At the bags under his eyes, the worry lines that hadn't been there a month ago, the way his hands kept fidgeting with his coffee cup.
+
+"You're right," Kael said. Alex's eyes widened. "You're right that it's dangerous. But she's my sister. She's alone in there. And I'm the only person who can reach her."
+
+Alex was quiet for a long time. Then: "Okay. But I'm monitoring you. Every session. If your vitals go sideways, I'm pulling the plug. Literally."
+
+"Deal."
+
+"And you're eating three meals a day."
+
+"Don't push it."
+
+"Two meals and a protein bar. Final offer."`,
+
+  () => `Alex showed up unannounced with a duffel bag full of equipment.
+
+"What is all this?"
+
+"Biometric monitors. Heart rate, blood oxygen, neural activity, galvanic skin response, core temperature." He started setting up around Kael's gaming chair with the efficiency of someone who'd planned this for days. "From now on, every time you log in, we're recording everything."
+
+"This looks expensive."
+
+"I called in favors. And I may have borrowed some equipment from a client. The point is—" Alex connected a sensor to Kael's wrist, "—we're doing this scientifically. No more guessing. No more 'I feel different.' We're going to have data."
+
+Kael watched Alex work. Precise. Methodical. Channeling his fear into the only language he trusted: technology.
+
+"You know," Kael said, "most people would have just called me crazy and stopped answering my calls."
+
+"Most people aren't responsible for keeping their idiot best friend alive while he plays a haunted video game."
+
+"It's not haunted."
+
+"Your body temperature dropped two degrees since you started playing, you can see in the dark, and the game is wirelessly talking to your comatose sister. If that's not haunted, the word has lost all meaning."
+
+He had a point.`,
+
+  () => `They sat on Alex's fire escape, legs dangling over the alley, passing a bottle of cheap whiskey back and forth. It was one of those rare moments between crises—a breath of normalcy in a life that had stopped being normal weeks ago.
+
+"Remember when the hardest thing in our lives was the calc final sophomore year?" Alex asked.
+
+"You literally cried."
+
+"It was a hard final!" Alex took a swig. "My point is... I miss when things were simple. When the scariest technology was the campus Wi-Fi going down during finals week."
+
+Kael stared at the city lights. From up here, everything looked peaceful. Ordered. A grid of light in the darkness, every window a life, every streetlamp a small rebellion against the night.
+
+"If I get her back," Kael said quietly, "if I actually find a way to bring Yuna home... what then? What do I do with what I've become?"
+
+Alex considered this. "You become the world's most overqualified security consultant. Supernatural reflexes, night vision, and the ability to scare the absolute hell out of anyone who tries a social engineering attack."
+
+Kael laughed. Really laughed—from the belly, the kind of laugh that shakes loose all the tension and fear and weight.
+
+"There he is," Alex said softly. "I was starting to think I'd lost you too."`,
 ];
 
 const REAL_REALITY_BLEED = [
@@ -1022,6 +1633,104 @@ On his desk, the VR headset pulsed with a faint light. Rhythmic. Like a heartbea
 Like HIS heartbeat.
 
 He crawled back to bed and lay there until morning, listening to the city breathe and trying not to count the ways he was becoming something other than human.`,
+
+  () => `He cut himself chopping vegetables. A small cut—a nick, really—on his index finger. The kind of wound that should bleed, sting, and heal in a day.
+
+It healed in eleven seconds.
+
+He watched it happen. The skin knitting itself together in real-time, the blood retreating back into the wound as if the cut had never existed. No scar. No pain. No evidence.
+
+He set the knife down carefully. Picked it up again. Held the blade against his forearm—not cutting, just pressing, feeling the edge against skin that felt somehow denser than it used to be.
+
+He put the knife away and ordered takeout instead. Some experiments were better left unrun.`,
+
+  () => `The nightmare woke him screaming—except it wasn't a nightmare. It was a memory. A game memory, bleeding through into sleep.
+
+He'd been in Floor Zero. The crystals. Yuna's face behind the refractive surface. But in the dream, the crystal had cracked, and what poured out wasn't light. It was code. Lines of code streaming from the broken crystal, wrapping around his arms, embedding in his skin, rewriting him from the outside in.
+
+He stumbled to the bathroom and splashed water on his face. The mirror showed someone he almost recognized—same face, but the eyes were wrong. Darker. The pupils slightly too large, catching light at an angle that human eyes shouldn't.
+
+He gripped the sink and breathed. In. Out. The way the hospital machines breathed for Yuna. Steady. Mechanical. Forced.
+
+"I'm still me," he told the reflection. "I'm still me."
+
+The reflection didn't argue. But it didn't agree, either.`,
+
+  () => `People had started avoiding him. Not consciously—not the way you'd avoid someone threatening. More like the way animals avoid a predator they can't see. Instinctive. Unconscious.
+
+On the subway, the seats around him emptied first. At the convenience store, the cashier avoided eye contact. The barista at his regular coffee shop had stopped making small talk, her smile mechanical, her movements hurried.
+
+He mentioned it to Alex.
+
+"It's pheromones," Alex said, not looking up from his monitor. "Or something like them. Your body chemistry is changing. People are picking up on it subconsciously."
+
+"I'm emitting predator pheromones."
+
+"You're emitting *something*. I tested your sweat sample—don't make that face, you agreed to the monitoring—and there are compounds in there I can't identify. Not toxic. Not harmful. Just... new."
+
+"Great. I'm leaking unknown chemicals and scaring strangers."
+
+"Look on the bright side. You'll never have trouble getting a seat on the subway again."`,
+
+  () => `He dreamed in code now.
+
+Not every night. But often enough that he'd started keeping a notebook by his bed, scribbling down the fragments before they dissolved. Variables. Functions. Loops. An entire programming language written in a syntax he'd never learned but somehow understood.
+
+This morning's dream had been different. Longer. More coherent. He'd been standing in a white void—no, not void. A development environment. A space where things were built before they were deployed.
+
+And he'd been building. His hands moving through the air, placing objects, defining parameters, creating something. A door. A pathway. A bridge between two systems that weren't supposed to connect.
+
+He woke with the blueprint still vivid in his mind. He could draw it. He could *build* it. The knowledge was just there, fully formed, as if someone had uploaded a tutorial directly into his brain while he slept.
+
+The game wasn't just changing his body. It was educating him. Preparing him for something.
+
+The question was: for what?`,
+
+  () => `The crosswalk light changed and thirty people started walking. Kael stood at the corner, frozen, because for a terrible moment he hadn't seen people. He'd seen health bars. Floating above their heads, green and full, pulsing slightly with each heartbeat.
+
+Level indicators. Class markers. The whole taxonomy of the game overlaid on reality like an augmented reality filter he couldn't turn off.
+
+The woman beside him: Level 3 Civilian. The businessman crossing against the light: Level 7 Executive. The child holding her mother's hand: Level 1 Innocent.
+
+He squeezed his eyes shut. When he opened them, the health bars were gone. Just people. Normal people living normal lives.
+
+But for a moment—just a moment—he'd known their hit points. And part of him had calculated the most efficient way to reduce them.
+
+He went home and sat in the shower with the water running until it went cold, trying to scrub the game out of his eyes.`,
+
+  () => `Food had become a problem. Not the eating of it—he could still eat, still chew and swallow and process nutrition. The problem was that nothing satisfied. Every meal left him feeling hollow, as if his body was waiting for something else. Something it couldn't find in bread and meat and vegetables.
+
+He knew what it wanted. The game had named it: Blood Essence. A fictional resource for a fictional class. Except his body didn't seem to understand the difference between fictional and real.
+
+The cravings hit hardest after sessions. He'd log out and find himself staring at the rare steak he'd been cooking, not at the sear or the seasoning but at the juice pooling on the cutting board. Pink. Iron-rich. Warm.
+
+He threw the steak away. Ordered a salad. Ate it mechanically, feeling nothing.
+
+The next day, he switched to a strictly vegan diet. It didn't help the cravings, but at least it removed the temptation of proximity.
+
+Alex noticed. Said nothing. But Kael caught him Googling "iron deficiency symptoms" when he thought no one was looking.`,
+
+  () => `It was the smell that undid him. He was on the subway, pressed between commuters, and someone had a papercut. A tiny wound, invisible from any distance, but he could smell it. Copper and iron and life, cutting through the subway's usual bouquet of sweat and exhaust.
+
+His mouth watered. His pupils dilated. For a terrible, crystal-clear second, he could hear the person's heartbeat—quick, stressed, the rhythm of a commuter running late—and something in his chest answered it. A resonance. A hunger that had nothing to do with his stomach.
+
+He got off at the next stop. Wrong stop. Three miles from home. He walked the whole way, breathing through his mouth, counting his steps, reciting prime numbers—anything to occupy the part of his brain that had just treated a human being as a food source.
+
+This was the line. The bright red line between what was happening to him and what was acceptable. And he'd just felt himself lean over it.
+
+He needed to talk to Dr. Yamada. He needed to talk to someone who understood what the game was doing to him, before it did something irreversible.`,
+
+  () => `His apartment had started to feel wrong. Not dangerous—wrong. Like wearing a shirt that was half a size too small. Everything was slightly off: the ceiling too low, the walls too close, the light too bright. His body wanted dimness. Wanted space. Wanted the vertical architecture of ${"`Eclipsis's`"} impossible dungeons instead of this cramped studio.
+
+He'd rearranged the furniture three times this week. Moved the bed against the wall, then into the center, then back again. Covered the windows with blackout curtains. Turned off the overhead light and worked by the glow of his monitor.
+
+Alex had visited and said it looked like a cave.
+
+"It IS a cave," Kael had replied, and only later realized he'd said it with pride.
+
+He was nesting. The way an animal nests—reshaping its environment to match its nature. And his nature was changing, bending away from the human baseline toward something that preferred darkness and solitude and the faint electromagnetic hum of active servers.
+
+He left the curtains up. But he turned the overhead light back on. Small rebellions. Human choices. The deliberate, defiant act of choosing to be what he was born rather than what he was becoming.`,
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════

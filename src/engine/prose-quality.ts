@@ -426,6 +426,112 @@ function checkConsistency(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// VOICE PROFILE ENFORCEMENT
+// Ensures prose tone matches the MC's current progression stage.
+// Early stages sound confused and scared. Later stages sound hardened and strategic.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+type ProgressionStage =
+  | 'naive_player' | 'curious_tester' | 'opportunist'
+  | 'paranoid_hider' | 'strategic_abuser' | 'seasoned_survivor';
+
+interface VoiceProfile {
+  /** Words/phrases that are allowed at this stage */
+  allowed: RegExp[];
+  /** Words/phrases that should NOT appear at this stage (too advanced/too naive) */
+  forbidden: RegExp[];
+  /** Replacement map: forbidden phrase -> stage-appropriate alternative */
+  replacements: [RegExp, string][];
+}
+
+const VOICE_PROFILES: Record<ProgressionStage, VoiceProfile> = {
+  naive_player: {
+    allowed: [/confused/i, /scared/i, /didn't understand/i, /what is this/i],
+    forbidden: [
+      /\bstrategically\b/i, /\bcalculated\b/i, /\bexploited\b/i,
+      /\bmanipulated\b/i, /\bwith practiced ease\b/i, /\blong ago learned\b/i,
+    ],
+    replacements: [
+      [/\bhe knew exactly\b/gi, 'he guessed'],
+      [/\bwith practiced ease\b/gi, 'with clumsy effort'],
+      [/\bstrategically\b/gi, 'instinctively'],
+      [/\bcalculated move\b/gi, 'desperate move'],
+      [/\bmanipulated\b/gi, 'stumbled through'],
+    ],
+  },
+  curious_tester: {
+    allowed: [/experiment/i, /tested/i, /wondered/i, /what if/i],
+    forbidden: [
+      /\bmastered\b/i, /\bwith deadly precision\b/i, /\broutine\b(?=.*exploit)/i,
+    ],
+    replacements: [
+      [/\bmastered\b/gi, 'fumbled with'],
+      [/\bwith deadly precision\b/gi, 'with uncertain hands'],
+      [/\broutinely exploited\b/gi, 'tentatively tested'],
+    ],
+  },
+  opportunist: {
+    allowed: [/opportunity/i, /advantage/i, /realized he could/i],
+    forbidden: [
+      /\binnocen(?:t|ce)\b.*\bfeigned\b/i, /\bparanoid\b/i,
+    ],
+    replacements: [
+      [/\bparanoid surveillance\b/gi, 'careful watching'],
+      [/\bfeigned innocence\b/gi, 'tried to act normal'],
+    ],
+  },
+  paranoid_hider: {
+    allowed: [/paranoi/i, /watching/i, /hiding/i, /can't trust/i, /cover/i],
+    forbidden: [
+      /\bnaive\b/i, /\bfirst time\b.*\bpower\b/i, /\bcarefree\b/i,
+    ],
+    replacements: [
+      [/\bnaively\b/gi, 'cautiously'],
+      [/\bcarefree\b/gi, 'watchful'],
+      [/\bwithout a care\b/gi, 'with constant vigilance'],
+    ],
+  },
+  strategic_abuser: {
+    allowed: [/calculated/i, /strategically/i, /exploited/i, /manipulated/i, /precision/i],
+    forbidden: [
+      /\bconfused\b(?!.*pretend)/i, /\bdidn't understand\b(?!.*feigned)/i,
+      /\bscared\b(?!.*mask)/i,
+    ],
+    replacements: [
+      [/\bhe was confused\b/gi, 'he weighed his options'],
+      [/\bdidn't understand\b/gi, 'chose not to reveal his understanding of'],
+      [/\bscared and alone\b/gi, 'wary but prepared'],
+    ],
+  },
+  seasoned_survivor: {
+    allowed: [/weary/i, /veteran/i, /survivor/i, /long since/i, /cost/i],
+    forbidden: [
+      /\bexcited\b(?!.*bitter)/i, /\bthrilled\b/i, /\bamazed\b(?!.*exhausted)/i,
+    ],
+    replacements: [
+      [/\bexcited by the discovery\b/gi, 'grimly noted the discovery'],
+      [/\bthrilled\b/gi, 'resigned'],
+      [/\bamazed\b/gi, 'unsurprised'],
+    ],
+  },
+};
+
+/**
+ * Enforce voice consistency based on the MC's progression stage.
+ * Replaces stage-inappropriate phrases with stage-appropriate alternatives.
+ */
+function enforceVoiceProfile(text: string, stage: ProgressionStage): string {
+  const profile = VOICE_PROFILES[stage];
+  if (!profile) return text;
+
+  let result = text;
+  for (const [pattern, replacement] of profile.replacements) {
+    result = result.replace(pattern, replacement);
+  }
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // QUALITY REPORT
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -529,6 +635,10 @@ export interface ProseCleanupOptions {
   reduceWeakWords?: boolean;
   /** Fix dialogue tag repetition */
   fixDialogueTags?: boolean;
+  /** Enforce voice profile based on MC progression stage */
+  enforceVoice?: boolean;
+  /** MC's current progression stage for voice enforcement */
+  mcStage?: ProgressionStage;
   /** World type for consistency checking */
   world?: 'vr' | 'real';
   /** Character names for consistency checking */
@@ -542,6 +652,8 @@ const DEFAULT_OPTIONS: Required<ProseCleanupOptions> = {
   deduplicateAdjectives: true,
   reduceWeakWords: true,
   fixDialogueTags: true,
+  enforceVoice: true,
+  mcStage: 'naive_player',
   world: 'vr',
   characterNames: ['Kael', 'Yuna', 'Alex'],
   deadCharacters: [],
@@ -596,7 +708,12 @@ export function processChapterProse(
     processed = fixDialogueTagRepetition(processed, rng);
   }
 
-  // Step 5: Final grammar pass (catch issues introduced by previous steps)
+  // Step 5: Enforce voice profile consistency
+  if (opts.enforceVoice && opts.mcStage) {
+    processed = enforceVoiceProfile(processed, opts.mcStage);
+  }
+
+  // Step 6: Final grammar pass (catch issues introduced by previous steps)
   if (opts.fixGrammar) {
     processed = fixGrammar(processed);
   }
