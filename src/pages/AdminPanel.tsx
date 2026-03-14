@@ -215,6 +215,49 @@ const AdminPanel = () => {
               </div>
             </div>
 
+            {/* Advanced Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Detail Level: {config.detailLevel ?? 7}/10
+                </label>
+                <input type="range" min={1} max={10} value={config.detailLevel ?? 7}
+                  onChange={(e) => handleConfigUpdate({ detailLevel: parseInt(e.target.value) })} className="w-full" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Character Focus: {config.characterFocus ?? 6}/10
+                </label>
+                <input type="range" min={1} max={10} value={config.characterFocus ?? 6}
+                  onChange={(e) => handleConfigUpdate({ characterFocus: parseInt(e.target.value) })} className="w-full" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Lore Depth: {config.loreDepth ?? 7}/10
+                </label>
+                <input type="range" min={1} max={10} value={config.loreDepth ?? 7}
+                  onChange={(e) => handleConfigUpdate({ loreDepth: parseInt(e.target.value) })} className="w-full" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Action Balance: {config.actionBalance ?? 6}/10
+                </label>
+                <input type="range" min={1} max={10} value={config.actionBalance ?? 6}
+                  onChange={(e) => handleConfigUpdate({ actionBalance: parseInt(e.target.value) })} className="w-full" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Mystery Density: {config.mysteryDensity ?? 7}/10
+                </label>
+                <input type="range" min={1} max={10} value={config.mysteryDensity ?? 7}
+                  onChange={(e) => handleConfigUpdate({ mysteryDensity: parseInt(e.target.value) })} className="w-full" />
+              </div>
+            </div>
+
             {/* Story Prompt */}
             <div className="mt-6">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

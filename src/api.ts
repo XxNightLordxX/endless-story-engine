@@ -1,6 +1,17 @@
 // Fully client-side API layer — all data in localStorage, chapters generated locally.
 // No backend server or API keys needed. Works on GitHub Pages for free.
 
+import type { ArcPhase, ChapterBlueprint } from './engine/types';
+import {
+  loadSeriesBible,
+  saveSeriesBible,
+  generateBlueprint,
+  updateSeriesBible,
+} from './engine/core';
+import type { ChapterMetadata } from './engine/core';
+import { putGlossaryEntry, putCodexEntry } from './db';
+import type { GlossaryEntry, CodexEntry } from './db';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface AuthUser {
@@ -32,6 +43,20 @@ export interface Chapter {
   characters: string[];
   locations: string[];
   createdAt: string;
+  // Extended metadata (optional for backward compat with Ch.1 seed)
+  newCharacters?: string[];
+  newLocations?: string[];
+  skillsUsed?: string[];
+  itemsGained?: string[];
+  plotThreadsAdvanced?: string[];
+  foreshadowingPlanted?: string[];
+  foreshadowingPaidOff?: string[];
+  emotionalTone?: string;
+  arcPhase?: ArcPhase;
+  tensionLevel?: number;
+  arcId?: string;
+  glossaryUpdates?: { id: string; type: string; name: string; description: string }[];
+  codexUpdates?: { id: string; category: string; title: string; content: string }[];
 }
 
 export interface AdminState {
@@ -50,6 +75,11 @@ export interface StoryConfig {
   tension: number;
   chapterLength: 'short' | 'medium' | 'long';
   storyPrompt: string;
+  detailLevel: number;      // 1-10 backstory/description density
+  characterFocus: number;   // 1-10 internal thoughts focus
+  loreDepth: number;        // 1-10 world-building density
+  actionBalance: number;    // 1-10 action vs introspection
+  mysteryDensity: number;   // 1-10 mysteries/questions to raise
 }
 
 // ─── localStorage helpers ─────────────────────────────────────────────────────
@@ -90,6 +120,11 @@ const DEFAULT_CONFIG: StoryConfig = {
   tension: 7,
   chapterLength: 'long',
   storyPrompt: '',
+  detailLevel: 7,
+  characterFocus: 6,
+  loreDepth: 7,
+  actionBalance: 6,
+  mysteryDensity: 7,
 };
 
 const CHAPTER_1: Chapter = {
@@ -370,7 +405,7 @@ export async function markChapterRead(
     const world: 'real' | 'vr' =
       previousChapter && previousChapter.world === 'real' ? 'vr' : 'real';
 
-    const chapter = generateChapterContent(nextNumber, world, previousChapter, config);
+    const chapter = await generateWithEngine(nextNumber, world, previousChapter, config);
     currentChapters.push(chapter);
     write(KEYS.chapters, currentChapters);
     generated++;
@@ -394,6 +429,80 @@ export async function updateStoryConfig(config: Partial<StoryConfig>): Promise<{
 export async function setApiKey(_apiKey: string): Promise<{ ok: boolean }> {
   // No-op: API key no longer needed
   return { ok: true };
+}
+
+// ─── Engine-Aware Generation Helper ──────────────────────────────────────────
+
+async function generateWithEngine(
+  nextNumber: number,
+  world: 'real' | 'vr',
+  previousChapter: Chapter | null,
+  config: StoryConfig,
+): Promise<Chapter> {
+  // Load SeriesBible, generate blueprint, produce chapter, update bible
+  const bible = await loadSeriesBible();
+  const blueprint = generateBlueprint(nextNumber, world, bible, config);
+  const chapter = generateChapterContent(nextNumber, world, previousChapter, config, blueprint);
+
+  // Build metadata for bible update
+  const meta: ChapterMetadata = {
+    chapterNumber: nextNumber,
+    world,
+    characters: chapter.characters,
+    locations: chapter.locations,
+    newCharacters: chapter.newCharacters ?? [],
+    newLocations: chapter.newLocations ?? [],
+    skillsUsed: chapter.skillsUsed ?? [],
+    itemsGained: chapter.itemsGained ?? [],
+    emotionalTone: chapter.emotionalTone ?? 'neutral',
+    arcPhase: chapter.arcPhase ?? 'rising',
+    tensionLevel: chapter.tensionLevel ?? 30,
+    plotThreadsAdvanced: chapter.plotThreadsAdvanced ?? [],
+    foreshadowingPlanted: [],
+    foreshadowingPaidOff: chapter.foreshadowingPaidOff ?? [],
+    primaryFocus: blueprint.primaryFocus,
+  };
+
+  // Update and save SeriesBible
+  const updatedBible = updateSeriesBible(bible, meta);
+  await saveSeriesBible(updatedBible);
+
+  // Persist glossary entries
+  if (chapter.glossaryUpdates) {
+    for (const g of chapter.glossaryUpdates) {
+      const entry: GlossaryEntry = {
+        id: g.id,
+        type: g.type as GlossaryEntry['type'],
+        name: g.name,
+        description: g.description,
+        firstAppearance: nextNumber,
+        lastAppearance: nextNumber,
+        appearances: [nextNumber],
+        relationships: [],
+        tags: [],
+        imageHint: '',
+      };
+      await putGlossaryEntry(entry);
+    }
+  }
+
+  // Persist codex entries
+  if (chapter.codexUpdates) {
+    for (const c of chapter.codexUpdates) {
+      const entry: CodexEntry = {
+        id: c.id,
+        category: c.category as CodexEntry['category'],
+        title: c.title,
+        content: c.content,
+        discovered: nextNumber,
+        relatedEntries: [],
+        spoilerLevel: 1,
+      };
+      await putCodexEntry(entry);
+    }
+  }
+
+  return chapter;
 }
 
 export async function generateChapters(count: number = 1): Promise<{ ok: boolean; generated: number; totalChapters: number; error?: string }> {
@@ -421,7 +530,7 @@ export async function generateChapters(count: number = 1): Promise<{ ok: boolean
     const world: 'real' | 'vr' =
       previousChapter && previousChapter.world === 'real' ? 'vr' : 'real';
 
-    const chapter = generateChapterContent(nextNumber, world, previousChapter, config);
+    const chapter = await generateWithEngine(nextNumber, world, previousChapter, config);
     currentChapters.push(chapter);
     write(KEYS.chapters, currentChapters);
     generated++;
@@ -797,21 +906,23 @@ function generateChapterContent(
   chapterNumber: number,
   world: 'real' | 'vr',
   previousChapter: Chapter | null,
-  config: StoryConfig
+  config: StoryConfig,
+  blueprint?: ChapterBlueprint,
 ): Chapter {
   const level = Math.floor(chapterNumber / 2) + 1;
 
   if (world === 'vr') {
-    return generateVRChapter(chapterNumber, level, previousChapter, config);
+    return generateVRChapter(chapterNumber, level, previousChapter, config, blueprint);
   }
-  return generateRealChapter(chapterNumber, level, previousChapter, config);
+  return generateRealChapter(chapterNumber, level, previousChapter, config, blueprint);
 }
 
 function generateVRChapter(
   chapterNumber: number,
   level: number,
   _previousChapter: Chapter | null,
-  config: StoryConfig
+  config: StoryConfig,
+  blueprint?: ChapterBlueprint,
 ): Chapter {
   const rng = createRng(chapterNumber * 137);
   const titleWord = `${pick(VR_TITLE_ADJ, rng)} ${pick(VR_TITLE_NOUN, rng)}`;
@@ -871,6 +982,59 @@ function generateVRChapter(
     `Kael explores ${locations[0]} and uncovers fragments of the Progenitor's forbidden history. The system warnings grow more frequent, and the boundary between worlds continues to thin.`,
   ];
 
+  const arcPhase = blueprint?.arcPhase ?? 'rising';
+  const tensionLevel = blueprint?.tensionTarget ?? Math.min(100, 30 + chapterNumber * 3);
+  const primaryFocus = blueprint?.primaryFocus ?? 'action';
+
+  // Determine new elements
+  const newChars = npcs.filter(() => rng() > 0.5);
+  const newLocs = locations.filter(() => rng() > 0.6);
+
+  // Skills used this chapter
+  const vrSkills = ['Crimson Surge', 'Nightsight', 'Blood Lance', 'Shadow Step', 'Hemoglobin Shield'];
+  const skillsUsed = pickN(vrSkills, Math.min(2, Math.floor(level / 2) + 1), rng);
+
+  // Items gained
+  const itemPool = ['Blood Catalyst', 'Shadow Cloak Fragment', 'Progenitor Shard', 'Crimson Vial', 'Ancient Rune'];
+  const itemsGained = rng() > 0.6 ? [pick(itemPool, rng)] : [];
+
+  // Emotional tones for VR
+  const vrTones = ['excitement', 'dread', 'determination', 'wonder', 'hunger', 'power'];
+
+  // Glossary updates
+  const glossaryUpdates: Chapter['glossaryUpdates'] = [];
+  for (const npc of newChars) {
+    glossaryUpdates.push({
+      id: `gl-${npc.toLowerCase().replace(/\s+/g, '-')}`,
+      type: 'character',
+      name: npc,
+      description: `An NPC encountered in ${locations[0]} during chapter ${chapterNumber}`,
+    });
+  }
+  for (const loc of newLocs) {
+    glossaryUpdates.push({
+      id: `gl-${loc.toLowerCase().replace(/\s+/g, '-')}`,
+      type: 'location',
+      name: loc,
+      description: `A location discovered in chapter ${chapterNumber}`,
+    });
+  }
+
+  // Codex updates for lore scenes
+  const codexUpdates: Chapter['codexUpdates'] = [];
+  if (loreScene) {
+    codexUpdates.push({
+      id: `cx-lore-${chapterNumber}`,
+      category: 'lore',
+      title: `Progenitor Lore Fragment #${chapterNumber}`,
+      content: `Discovered in ${locations[0]} during chapter ${chapterNumber}`,
+    });
+  }
+
+  // Foreshadowing
+  const foreshadowingPlanted = blueprint?.foreshadowingToPlant ?? [];
+  const foreshadowingPaidOff = blueprint?.foreshadowingToPayoff ?? [];
+
   return {
     id: `ch-${chapterNumber}`,
     chapterNumber,
@@ -882,6 +1046,19 @@ function generateVRChapter(
     characters,
     locations,
     createdAt: new Date().toISOString(),
+    newCharacters: newChars,
+    newLocations: newLocs,
+    skillsUsed,
+    itemsGained,
+    plotThreadsAdvanced: blueprint?.mustAdvancePlots ?? ['plot-progenitor-awakening'],
+    foreshadowingPlanted,
+    foreshadowingPaidOff,
+    emotionalTone: pick(vrTones, rng),
+    arcPhase,
+    tensionLevel,
+    arcId: blueprint ? 'arc-main-progenitor' : undefined,
+    glossaryUpdates,
+    codexUpdates,
   };
 }
 
@@ -889,7 +1066,8 @@ function generateRealChapter(
   chapterNumber: number,
   level: number,
   previousChapter: Chapter | null,
-  _config: StoryConfig
+  _config: StoryConfig,
+  blueprint?: ChapterBlueprint,
 ): Chapter {
   const rng = createRng(chapterNumber * 251);
   const titleWord = pick(REAL_TITLES, rng);
@@ -938,6 +1116,38 @@ function generateRealChapter(
     `Real-world consequences of Kael's time in Eclipsis Online become impossible to ignore. His senses sharpen, his body changes, and the hunger grows. ${hasAlex ? 'A tense conversation with Alex raises questions neither can answer.' : 'Yuna\'s condition shows unexpected changes.'}`,
   ];
 
+  const arcPhase = blueprint?.arcPhase ?? 'rising';
+  const tensionLevel = blueprint?.tensionTarget ?? Math.min(100, 25 + chapterNumber * 2);
+  const primaryFocus = blueprint?.primaryFocus ?? 'character';
+
+  // Real world emotional tones
+  const realTones = ['anxiety', 'isolation', 'determination', 'paranoia', 'hope', 'grief', 'connection'];
+
+  // Glossary updates
+  const glossaryUpdates: Chapter['glossaryUpdates'] = [];
+  if (hasAlex && chapterNumber <= 3) {
+    glossaryUpdates.push({
+      id: 'gl-alex',
+      type: 'character',
+      name: 'Alex',
+      description: 'Kael\'s best friend who notices the physical changes happening to him',
+    });
+  }
+
+  // Codex for real-world revelations
+  const codexUpdates: Chapter['codexUpdates'] = [];
+  if (rng() > 0.6) {
+    codexUpdates.push({
+      id: `cx-real-${chapterNumber}`,
+      category: 'system',
+      title: `Reality Bleed Incident #${Math.ceil(chapterNumber / 2)}`,
+      content: `Kael experiences game abilities manifesting in the real world during chapter ${chapterNumber}`,
+    });
+  }
+
+  const foreshadowingPlanted = blueprint?.foreshadowingToPlant ?? [];
+  const foreshadowingPaidOff = blueprint?.foreshadowingToPayoff ?? [];
+
   return {
     id: `ch-${chapterNumber}`,
     chapterNumber,
@@ -949,5 +1159,18 @@ function generateRealChapter(
     characters,
     locations,
     createdAt: new Date().toISOString(),
+    newCharacters: hasAlex && chapterNumber <= 3 ? ['Alex'] : [],
+    newLocations: [],
+    skillsUsed: rng() > 0.5 ? ['Nightsight'] : [],
+    itemsGained: [],
+    plotThreadsAdvanced: blueprint?.mustAdvancePlots ?? ['plot-save-yuna', 'plot-reality-bleed'],
+    foreshadowingPlanted,
+    foreshadowingPaidOff,
+    emotionalTone: pick(realTones, rng),
+    arcPhase,
+    tensionLevel,
+    arcId: blueprint ? 'arc-main-progenitor' : undefined,
+    glossaryUpdates,
+    codexUpdates,
   };
 }
