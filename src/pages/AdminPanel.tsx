@@ -258,6 +258,45 @@ const AdminPanel = () => {
               </div>
             </div>
 
+            {/* Narrative Mechanics Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Exploit Density: {config.exploitDensity ?? 5}/10
+                </label>
+                <input type="range" min={1} max={10} value={config.exploitDensity ?? 5}
+                  onChange={(e) => handleConfigUpdate({ exploitDensity: parseInt(e.target.value) })} className="w-full" />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">How often Kael discovers and uses exploits</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Concealment Pressure: {config.concealmentPressure ?? 5}/10
+                </label>
+                <input type="range" min={1} max={10} value={config.concealmentPressure ?? 5}
+                  onChange={(e) => handleConfigUpdate({ concealmentPressure: parseInt(e.target.value) })} className="w-full" />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Intensity of hiding powers from others</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Progression Speed: {config.progressionSpeed ?? 4}/10
+                </label>
+                <input type="range" min={1} max={10} value={config.progressionSpeed ?? 4}
+                  onChange={(e) => handleConfigUpdate({ progressionSpeed: parseInt(e.target.value) })} className="w-full" />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">How fast MC evolves through stages</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Moral Decay: {config.moralDecay ?? 3}/10
+                </label>
+                <input type="range" min={1} max={10} value={config.moralDecay ?? 3}
+                  onChange={(e) => handleConfigUpdate({ moralDecay: parseInt(e.target.value) })} className="w-full" />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Rate of moral line erosion over time</p>
+              </div>
+            </div>
+
             {/* Story Prompt */}
             <div className="mt-6">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

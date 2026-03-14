@@ -8,6 +8,7 @@ import {
   generateBlueprint,
   updateSeriesBible,
 } from './engine/core';
+import { processChapterProse } from './engine/prose-quality';
 import type { ChapterMetadata } from './engine/core';
 import { putGlossaryEntry, putCodexEntry } from './db';
 import type { GlossaryEntry, CodexEntry } from './db';
@@ -130,6 +131,10 @@ const DEFAULT_CONFIG: StoryConfig = {
   loreDepth: 7,
   actionBalance: 6,
   mysteryDensity: 7,
+  exploitDensity: 5,
+  concealmentPressure: 5,
+  progressionSpeed: 4,
+  moralDecay: 3,
 };
 
 const CHAPTER_1: Chapter = {
@@ -447,7 +452,29 @@ async function generateWithEngine(
   // Load SeriesBible, generate blueprint, produce chapter, update bible
   const bible = await loadSeriesBible();
   const blueprint = generateBlueprint(nextNumber, world, bible, config);
-  const chapter = generateChapterContent(nextNumber, world, previousChapter, config, blueprint);
+  const rawChapter = generateChapterContent(nextNumber, world, previousChapter, config, blueprint);
+
+  // Run prose quality pipeline — fixes grammar, adjective repetition, weak words
+  const deadChars = bible.characters.filter(c => c.status === 'dead').map(c => c.name);
+  const charNames = bible.characters.map(c => c.name);
+  const { content: cleanedContent } = processChapterProse(
+    rawChapter.content,
+    nextNumber * 773,
+    {
+      fixGrammar: true,
+      deduplicateAdjectives: true,
+      reduceWeakWords: true,
+      fixDialogueTags: true,
+      world,
+      characterNames: charNames,
+      deadCharacters: deadChars,
+    },
+  );
+  const chapter = {
+    ...rawChapter,
+    content: cleanedContent,
+    wordCount: cleanedContent.split(/\s+/).length,
+  };
 
   // Build metadata for bible update
   const meta: ChapterMetadata = {
@@ -560,6 +587,14 @@ export async function deleteChapter(chapterNumber: number): Promise<{ ok: boolea
 // and deterministic (regenerating chapter N always gives the same result).
 // Content is parametric — scenes take chapter number, level, NPC names, locations
 // as inputs and produce varied prose, preventing repetition across chapters.
+//
+// ENDLESS GENERATION STRATEGY:
+// Templates alone would eventually exhaust. To prevent this:
+// 1. Combinatorial synthesis: sentences built from fragment pools (A×B×C = thousands)
+// 2. Chapter-number parameterization: level, stats, thresholds create unique values
+// 3. Blueprint integration: exploit/lore/concealment directives add unique scenes
+// 4. Progression stage filtering: same templates read differently at different stages
+// 5. Anti-repetition via bible.usedSceneKeys: tracks what was used and when
 
 // Seeded PRNG (mulberry32) — deterministic per chapter number
 function createRng(seed: number) {
@@ -578,6 +613,85 @@ function pick<T>(arr: T[], rng: () => number): T {
 function pickN<T>(arr: T[], n: number, rng: () => number): T[] {
   const shuffled = [...arr].sort(() => rng() - 0.5);
   return shuffled.slice(0, Math.min(n, arr.length));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMBINATORIAL SENTENCE SYNTHESIS
+// Instead of fixed templates, these build sentences from fragment pools.
+// With 10 openers × 8 middles × 10 closers = 800 unique combinations per type.
+// This prevents template exhaustion and ensures effectively endless variety.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const COMBAT_OPENERS = [
+  (loc: string) => `The creature emerged from the depths of ${loc}`,
+  (loc: string) => `${loc} erupted into violence without warning`,
+  (loc: string) => `Shadows coalesced at the center of ${loc}, taking form`,
+  (loc: string) => `A sound like breaking glass echoed through ${loc}`,
+  (loc: string) => `The ground beneath ${loc} trembled, and something rose`,
+  (loc: string) => `Kael sensed it before he saw it—a disturbance in ${loc}`,
+  (loc: string) => `The ambient hum of ${loc} shifted to a predatory frequency`,
+  (loc: string) => `It had been waiting in ${loc}. Patient. Hungry. Just like him.`,
+  (loc: string) => `The first attack came from above, dropping from ${loc}'s ceiling like a spider`,
+  (loc: string) => `${loc} went silent. In Eclipsis, silence was never good.`,
+];
+
+const COMBAT_MIDDLES = [
+  (npc: string, level: number) => `${npc} shouted a warning, but Kael was already moving. Level ${level} reflexes were something else entirely—thought and action collapsed into a single moment.`,
+  (npc: string, _level: number) => `"Watch the flanks!" ${npc} called out, but Kael had already read the attack pattern. The Progenitor's blood sang with combat data, translating every twitch into trajectory.`,
+  (_npc: string, level: number) => `His body moved on instinct—no, on something deeper than instinct. The Progenitor class had rewritten his combat algorithms at a level below conscious thought. At Level ${level}, he was less a player and more a weapon.`,
+  (npc: string, _level: number) => `Crimson energy surged through his veins as he activated his class abilities. ${npc} stepped back, eyes wide. They'd never seen anyone fight like this. Nobody had.`,
+  (_npc: string, level: number) => `Blood Essence burned in his veins like molten copper. Each strike drained a little more, but at Level ${level}, his reserves were deep. And the hunger—the hunger made everything sharper.`,
+  (npc: string, _level: number) => `The fight became a conversation—attack, parry, counter, riposte. ${npc} provided support, but they both knew this was Kael's arena. The Progenitor class didn't share.`,
+  (_npc: string, level: number) => `He processed the combat data in real-time: HP, stance, cooldowns, vulnerability windows. At Level ${level}, the calculations were automatic. Effortless. Terrifying.`,
+  (_npc: string, _level: number) => `The creature was fast. But he was faster. Not by training—by transformation. The thing inside his blood, the ancient predator code that the Progenitor class had awakened, turned every fight into a hunt.`,
+];
+
+const COMBAT_CLOSERS = [
+  (ch: number) => `The creature dissolved into shadow and light, and the experience notification flashed:\n\n**[System: Combat resolved. Performance rating: ${ch > 20 ? 'S+' : ch > 10 ? 'A' : 'B'}. Bloodline resonance: active.]**`,
+  () => `When it was over, the silence returned. But it was a different silence—the silence of a predator surveying its kill. He didn't like how natural that felt.`,
+  (ch: number) => `**[System: Enemy defeated. Blood Essence harvested: ${50 + ch * 10}. Progenitor absorption: complete.]**\n\nHe felt the rush—the transfer of data from the fallen creature into his bloodline. It tasted like power. It tasted like more.`,
+  () => `The last echo of combat faded. In its wake, a notification he'd been seeing more frequently:\n\n**[System: Combat efficiency exceeds class parameters. Recalibrating...]**\n\nRecalibrating. As if it was trying to catch up with what he was becoming.`,
+  () => `He sheathed his weapon and checked his hands. Steady. No tremor. No guilt. Just the quiet satisfaction of efficient violence.\n\nWhen had that become normal?`,
+  (ch: number) => `**[System: Chapter ${ch} Combat Stats — Enemies defeated: ${2 + Math.floor(ch / 3)}. Damage taken: ${Math.max(0, 30 - ch)}%. Blood Essence used: ${40 + ch * 2}%.]**\n\nThe numbers told a story of escalation. He chose not to read between the lines.`,
+  () => `The creature's form flickered and dissolved, leaving behind a loot drop and a question: was it getting easier because he was getting stronger, or because the game was getting easier for him?\n\nHe didn't want to examine the distinction too closely.`,
+  () => `Silence. The good kind—earned, not given. He stood among the aftermath and breathed. The hunger receded, temporarily sated. It always came back. But for now, he could think clearly.\n\nClarity was a luxury in both his worlds.`,
+  () => `He looted the remains methodically—checking stats, noting material values, flagging anything transferable. Efficiency. That's what survival looked like now.`,
+  (_ch: number) => `The fight data scrolled past his vision. He'd already moved on to the next objective. Dwelling on combat was a luxury for people who fought for fun. He fought for Yuna.`,
+];
+
+/** Build a unique combat scene from combinatorial fragments */
+function buildCombatScene(npc: string, loc: string, ch: number, level: number, rng: () => number): string {
+  const opener = pick(COMBAT_OPENERS, rng)(loc);
+  const middle = pick(COMBAT_MIDDLES, rng)(npc, level);
+  const closer = pick(COMBAT_CLOSERS, rng)(ch);
+  return `${opener}.\n\n${middle}\n\n${closer}`;
+}
+
+const EXPLORATION_OPENERS = [
+  (loc: string) => `${loc} stretched before him in impossible geometry`,
+  (loc: string) => `The deeper he ventured into ${loc}, the stranger the architecture became`,
+  (loc: string) => `${loc} hummed with a frequency that resonated in his bones`,
+  (loc: string) => `Nobody had been to this part of ${loc} in a long time. The dust proved it.`,
+  (loc: string) => `${loc} was old. Not game-old—the kind of old that felt like it predated the code.`,
+  (loc: string) => `He found the hidden passage in ${loc} by accident. Or the passage found him.`,
+  (loc: string) => `The map said ${loc} ended here. The Progenitor's senses said otherwise.`,
+  (loc: string) => `Each step into ${loc} felt like descending into a memory that wasn't his.`,
+];
+
+const EXPLORATION_MIDDLES = [
+  (npc: string) => `${npc} materialized beside him, their expression unreadable. "This area was sealed in Patch 0.7.3," they said. "Nobody should be able to access it. And yet..." They looked at Kael with something between curiosity and fear.`,
+  (npc: string) => `"Most players can't see past the illusion," ${npc} explained, gesturing at what appeared to be a solid wall. "But your class... the Progenitor sees what's really here. What was always here."`,
+  (npc: string) => `${npc} kept pace with him, unusually silent. When they finally spoke, their voice was different—stripped of the NPC cadence, replaced by something raw. "You remind me of someone. Someone the game tried to forget."`,
+  (_npc: string) => `The walls were covered in script—not the game's standard runic language, but something older. Something his class ability could read instinctively, the meaning flowing into his mind like blood through veins.`,
+  (npc: string) => `"Don't touch anything," ${npc} warned. "The objects here aren't rendered normally. They exist in a layer between the game and..." They paused, searching for a word. "And whatever is on the other side."`,
+  (_npc: string) => `He found a terminal—not a fantasy element, but an actual computer terminal, hidden behind an ornate tapestry. The screen was dark, but when he touched it, it pulsed with the same rhythm as his heartbeat.`,
+];
+
+/** Build a unique exploration scene from combinatorial fragments */
+function buildExplorationScene(npc: string, loc: string, rng: () => number): string {
+  const opener = pick(EXPLORATION_OPENERS, rng)(loc);
+  const middle = pick(EXPLORATION_MIDDLES, rng)(npc);
+  return `${opener}.\n\n${middle}`;
 }
 
 // ── VR World story data ──
@@ -940,9 +1054,15 @@ function generateVRChapter(
   const sysNotes = pickN(SYSTEM_TEMPLATES, config.tension > 5 ? 3 : 2, rng)
     .map((fn) => fn(chapterNumber, level));
 
-  // Build sections
-  const combatScene = pick(VR_COMBAT_SCENES, rng)(npcs[0], locations[0]);
-  const explorationScene = pick(VR_EXPLORATION_SCENES, rng)(npcs[1] || npcs[0], locations[1] || locations[0]);
+  // Build sections — alternate between fixed templates and combinatorial synthesis
+  // to prevent exhaustion while maintaining quality
+  const useCombinatorial = chapterNumber % 2 === 0; // alternate to double effective pool
+  const combatScene = useCombinatorial
+    ? buildCombatScene(npcs[0], locations[0], chapterNumber, level, rng)
+    : pick(VR_COMBAT_SCENES, rng)(npcs[0], locations[0]);
+  const explorationScene = useCombinatorial
+    ? buildExplorationScene(npcs[1] || npcs[0], locations[1] || locations[0], rng)
+    : pick(VR_EXPLORATION_SCENES, rng)(npcs[1] || npcs[0], locations[1] || locations[0]);
   const loreScene = config.tension > 4 ? pick(VR_LORE_SCENES, rng)(locations[0]) : '';
 
   // Build pacing intro
