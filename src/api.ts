@@ -80,6 +80,11 @@ export interface StoryConfig {
   loreDepth: number;        // 1-10 world-building density
   actionBalance: number;    // 1-10 action vs introspection
   mysteryDensity: number;   // 1-10 mysteries/questions to raise
+  // Narrative control knobs
+  exploitDensity?: number;       // 1-10 how often MC discovers/uses exploits
+  concealmentPressure?: number;  // 1-10 how hard it is to hide powers
+  progressionSpeed?: number;     // 1-10 how fast MC evolves from naive to seasoned
+  moralDecay?: number;           // 1-10 how quickly moral lines blur
 }
 
 // ─── localStorage helpers ─────────────────────────────────────────────────────
@@ -956,6 +961,29 @@ function generateVRChapter(
     `Before he could log out, the world flickered. For one impossible moment, he saw both—his apartment, overlaid on the game world, two realities occupying the same space like a double exposure.\n\nThen it was just the game again. Just the game.\n\nBut in his apartment, on his desk, a notification blinked on his phone:\n\n*"Yuna's neural patterns have changed again. Please contact Dr. Yamada at your earliest convenience."*`,
   ];
 
+  // ─── Narrative intelligence scenes from blueprint ────────────────────────
+  const exploitScene = blueprint?.exploitDirective
+    ? blueprint.exploitDirective.type === 'discover'
+      ? `Something caught his eye—a flicker in the game's geometry, a seam where two textures didn't quite align. He reached out and his hand passed through the wall. Not a bug. A door. A door the developers never intended anyone to find.\n\n**[System: Boundary anomaly detected. Logging...]**\n\nThe notification disappeared before he could read the rest. But the door remained.`
+      : blueprint.exploitDirective.type === 'use'
+        ? `He did it again—the trick he'd discovered three sessions ago. The one that let him stack buffs in a way the system clearly wasn't designed to handle. His stats spiked, numbers climbing past their supposed caps, and for thirty beautiful, terrifying seconds, he was untouchable.\n\nThe system didn't flag it. It never did. Either the developers hadn't noticed, or they couldn't see it.\n\nOr they were watching to see what he'd do next.`
+        : `He spent an hour testing the boundaries—methodical, careful, the way a lockpick tests tumblers. What happens if he activates two class abilities simultaneously? What if he exits the skill animation early? What if he triggers a transfer while already in transition?\n\nEach test revealed a little more of the machine beneath the magic.`
+    : '';
+
+  const concealmentScene = blueprint?.closeCallScheduled
+    ? `"Hey—did you just—" Another player stopped mid-sentence, staring at Kael. They'd seen something. The way he'd moved, or the way the shadows had bent toward him, or the crimson flicker in his eyes that he still couldn't fully suppress.\n\n"Did I what?" Kael kept his voice flat. Casual. Bored.\n\n"Nothing. I... nothing." They backed away, but they kept glancing over their shoulder.\n\nToo close. That was too close.`
+    : '';
+
+  const growthScene = blueprint?.characterGrowthBeat
+    ? (() => {
+        const stage = blueprint.mcStage;
+        if (stage === 'naive_player') return `He was still treating this like a game. Running headlong into danger, laughing at the system notifications, treating every new ability like a birthday present. But somewhere in the back of his mind, a voice whispered that birthday presents don't change your DNA.`;
+        if (stage === 'curious_tester') return `He'd started keeping notes. Not in the game—in a physical notebook, hidden under his mattress like contraband. Every anomaly. Every glitch. Every moment where the game's rules bent or broke. The pattern was there. He just couldn't see it yet.`;
+        if (stage === 'opportunist') return `The realization hit him mid-combat: he wasn't just playing the game anymore. He was using it. Every ability that transferred to reality, every stat boost that lingered after logout—they weren't bugs to report. They were advantages to exploit.`;
+        return `He watched himself from a distance now—a cold, clinical observer of his own transformation. The boy who'd first put on the headset wouldn't recognize what he'd become. And honestly? He wasn't sure that was a bad thing.`;
+      })()
+    : '';
+
   const content = [
     pick(intros, rng),
     '',
@@ -965,9 +993,15 @@ function generateVRChapter(
     '',
     sysNotes[1] || '',
     '',
+    exploitScene,
+    '',
     explorationScene,
     '',
+    concealmentScene,
+    '',
     loreScene,
+    '',
+    growthScene,
     '',
     sysNotes[2] || '',
     '',
@@ -1096,14 +1130,45 @@ function generateRealChapter(
     `At 11:47 PM, every light in his apartment flickered. His laptop screen glitched, displaying a cascade of code he didn't recognize. And on his phone, a notification from an app he'd never installed:\n\n*"Eclipsis Online: Real-World Integration — Phase ${Math.min(level, 5)} of 7 complete."*\n\nHe deleted the notification. But he couldn't delete the feeling that something was watching him through the screen.`,
   ];
 
+  // ─── Narrative intelligence scenes from blueprint ────────────────────────
+  const concealmentScene = blueprint?.concealmentPressure === 'high' || blueprint?.concealmentPressure === 'critical'
+    ? `He caught himself doing it again—moving too fast, reacting before the stimulus. The barista at the coffee shop had fumbled a cup and he'd caught it mid-air, arm snapping out with inhuman precision. She stared at him. He stared at the cup.\n\n"Good reflexes," she said.\n\n"Yeah," he managed. "I play a lot of... video games."\n\nThe excuse was wearing thin. They all were.`
+    : '';
+
+  const closeCallScene = blueprint?.closeCallScheduled
+    ? `The moment came without warning. A car ran a red light. Kael saw it—not with human eyes, but with the Progenitor's sight, time slowing to a crawl as his enhanced perception kicked in. He grabbed the stranger beside him and pulled them back, moving faster than any human should.\n\nThe car passed. The stranger was safe. And three people on the sidewalk were staring at Kael with expressions that ranged from grateful to terrified.\n\n"How did you—"\n\n"Adrenaline," he said. The word tasted like ash. "Just adrenaline."`
+    : '';
+
+  const transferScene = blueprint?.transferEvent
+    ? `It happened in the shower. He was rinsing off, trying to feel normal, when he noticed his reflection in the bathroom mirror through the steam. His skin was different—paler, smoother, like porcelain given life. And when he flexed his hand, he could feel something new: a pulse of energy that didn't come from his body.\n\nAnother transfer. Another piece of the game following him home.\n\nHe added it to the mental list. The list was getting long.`
+    : '';
+
+  const growthScene = blueprint?.characterGrowthBeat
+    ? (() => {
+        const stage = blueprint.mcStage;
+        if (stage === 'naive_player') return `He told himself it would stop. The changes, the abilities, the hunger—they would fade like a dream fades in morning light. He almost believed it.`;
+        if (stage === 'curious_tester') return `He'd started testing. Small things—lifting objects that should have been too heavy, reading signs from impossible distances, hearing conversations through walls. Each confirmation sent a thrill through him that he wasn't ready to examine.`;
+        if (stage === 'paranoid_hider') return `Every mirror was a threat. Every camera, every phone pointed in his direction. He'd started mapping the security cameras on his route to the hospital, planning paths that kept him out of sight. When had he become this person?`;
+        return `He sat in the dark apartment and took inventory with the cold precision of someone cataloguing weapons. Nightsight: active. Enhanced reflexes: permanent. Strength: approximately three times baseline. The list went on. He wasn't hiding from what he'd become anymore. He was optimizing.`;
+      })()
+    : '';
+
   const content = [
     pick(intros, rng),
     '',
     hospitalScene,
     '',
+    concealmentScene,
+    '',
     alexScene,
     '',
+    closeCallScene,
+    '',
     realityBleed,
+    '',
+    transferScene,
+    '',
+    growthScene,
     '',
     pick(endings, rng),
   ]

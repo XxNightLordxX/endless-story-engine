@@ -16,6 +16,11 @@ import type {
   PacingState,
   MCStats,
   World,
+  MCPsychology,
+  ConcealmentState,
+  ProgressionArcState,
+  ProgressionStage,
+  ExploitDirective,
 } from './types';
 import { getMeta, setMeta } from '../db';
 
@@ -121,6 +126,84 @@ function createDefaultPacingState(): PacingState {
     chaptersSinceNewSkill: 0,
     recentSceneTypes: [],
     suggestedNextTone: 'dark',
+  };
+}
+
+function createDefaultMCPsychology(): MCPsychology {
+  return {
+    stage: 'naive_player',
+    gamePerception: 'entertainment',
+    moralFlexibility: 15,
+    selfAwareness: 10,
+    addictionLevel: 20,
+    rationalizationTendency: 10,
+    controlNeed: 30,
+    riskTolerance: 60,
+    recurringThoughts: ['I need to save Yuna', 'This game feels too real'],
+    behavioralPatterns: ['Plays late into the night', 'Avoids mirrors'],
+    rationalizations: ["It's just a game — the effects will wear off"],
+    deepFears: ['Losing Yuna permanently', 'Becoming something inhuman'],
+    moralLines: ['Never harm an innocent', 'Never lie to Alex', 'Never use powers to hurt real people'],
+    pivotalMoments: [],
+  };
+}
+
+function createDefaultConcealmentState(): ConcealmentState {
+  return {
+    vrConcealment: {
+      world: 'vr',
+      risk: 'safe',
+      concealedAbilities: [],
+      concealedItems: [],
+      concealedKnowledge: ['Progenitor class is merging with reality'],
+      suspiciousCharacters: [],
+      activeStrategies: ['Avoids using unique Progenitor abilities in public areas'],
+      chaptersSinceCloseCall: 0,
+    },
+    realConcealment: {
+      world: 'real',
+      risk: 'safe',
+      concealedAbilities: ['Nightsight', 'Enhanced reflexes'],
+      concealedItems: [],
+      concealedKnowledge: ['Game stats are bleeding into reality'],
+      suspiciousCharacters: [{ characterId: 'alex', suspicionLevel: 20, whatTheySuspect: 'Something is changing about Kael physically' }],
+      activeStrategies: ['Wears sunglasses to hide eye changes', 'Attributes reflexes to adrenaline'],
+      chaptersSinceCloseCall: 0,
+    },
+    coverStories: [],
+    closeCalls: [],
+    hiddenAssets: [
+      {
+        id: 'hidden-nightsight',
+        type: 'ability',
+        name: 'Nightsight (real-world)',
+        hiddenFrom: ['alex', 'public'],
+        hidingMethod: 'Pretends to use phone flashlight',
+        discoveryRisk: 30,
+        lastUsedSecretly: null,
+      },
+    ],
+    investigators: [],
+    heatLevel: 10,
+  };
+}
+
+function createDefaultProgressionArc(): ProgressionArcState {
+  return {
+    currentStage: 'naive_player',
+    stageEnteredChapter: 1,
+    advancementTriggers: [
+      'Discovers a stat transfer that he can reproduce',
+      'Witnesses a real consequence of game actions',
+      'Gets caught using an ability and must explain it away',
+    ],
+    stageHistory: [
+      { stage: 'naive_player', entered: 1, exited: null, definingMoment: 'First login to Eclipsis Online' },
+    ],
+    dominantStrategy: 'brute_force',
+    exploitUsageCount: 0,
+    closeCallCount: 0,
+    realizations: [],
   };
 }
 
@@ -445,6 +528,54 @@ export function createDefaultSeriesBible(): SeriesBible {
     pacingState: createDefaultPacingState(),
     usedSceneKeys: [],
     lastGeneratedChapter: 1,
+
+    // Deep character & narrative systems
+    mcPsychology: createDefaultMCPsychology(),
+    exploits: [],
+    concealmentState: createDefaultConcealmentState(),
+    progressionArc: createDefaultProgressionArc(),
+    loreFragments: [],
+    relationshipDynamics: [
+      {
+        characterId: 'alex',
+        publicFace: 'Everything is fine, just stressed about Yuna',
+        privateFeelings: 'Grateful but afraid Alex will discover the truth',
+        hidingFrom: ['Game stat transfers', 'Physical changes', 'Nightsight ability'],
+        theirSuspicions: ['Kael looks different', 'He seems faster, more alert'],
+        powerBalance: 'equal',
+        manipulationLevel: 10,
+        guiltLevel: 25,
+        pivotalMoments: [],
+        truthRevealOutcome: 'complicated',
+      },
+      {
+        characterId: 'yuna',
+        publicFace: 'Hopeful older brother visiting every day',
+        privateFeelings: 'Desperate guilt mixed with fragile hope',
+        hidingFrom: [],
+        theirSuspicions: [],
+        powerBalance: 'complicated',
+        manipulationLevel: 0,
+        guiltLevel: 60,
+        pivotalMoments: [],
+        truthRevealOutcome: 'unknown',
+      },
+    ],
+    transferLog: [
+      {
+        id: 'transfer-nightsight',
+        chapter: 1,
+        direction: 'vr_to_real',
+        type: 'ability',
+        name: 'Nightsight',
+        description: 'Perfect vision in darkness began manifesting in the real world',
+        intentional: false,
+        mcReaction: 'Confused and frightened, then fascinated',
+        concealmentMethod: 'Pretends to use phone flashlight, wears sunglasses',
+        sideEffects: ['Slight light sensitivity', 'Eyes occasionally reflect light like a cat'],
+        beingExploited: false,
+      },
+    ],
   };
 }
 
@@ -559,6 +690,62 @@ export function generateBlueprint(
   // Word target
   const wordTargets = { short: 800, medium: 1200, long: 2000 };
 
+  // ─── New narrative intelligence ─────────────────────────────────────────────
+  const mcStage = bible.mcPsychology.stage;
+
+  // Determine exploit directive based on progression and chapter
+  let exploitDirective: ExploitDirective | null = null;
+  const activeExploits = bible.exploits.filter(e => e.status === 'actively_used' || e.status === 'confirmed');
+  if (chapterNumber > 3 && rng() > 0.6) {
+    if (activeExploits.length === 0) {
+      exploitDirective = { type: 'discover', exploitId: null, context: 'MC stumbles upon an unintended interaction' };
+    } else if (rng() > 0.5) {
+      exploitDirective = { type: 'use', exploitId: pick(activeExploits, rng).id, context: 'MC leverages a known exploit' };
+    } else {
+      exploitDirective = { type: 'test', exploitId: null, context: 'MC experiments with game boundaries' };
+    }
+  }
+
+  // Concealment pressure scales with heat level and chapter
+  const heatLevel = bible.concealmentState.heatLevel;
+  const concealmentPressure: ChapterBlueprint['concealmentPressure'] =
+    heatLevel > 80 ? 'critical' :
+    heatLevel > 60 ? 'high' :
+    heatLevel > 35 ? 'medium' :
+    heatLevel > 15 ? 'low' : 'none';
+
+  // Close calls happen when heat is building and it's been a while
+  const chaptersSinceCC = Math.min(
+    bible.concealmentState.vrConcealment.chaptersSinceCloseCall,
+    bible.concealmentState.realConcealment.chaptersSinceCloseCall,
+  );
+  const closeCallScheduled = concealmentPressure !== 'none' && chaptersSinceCC >= 3 && rng() > 0.5;
+
+  // Character growth beat based on psychology
+  const growthBeats: string[] = [];
+  if (bible.mcPsychology.selfAwareness < 40) growthBeats.push('MC notices another change but dismisses it');
+  if (bible.mcPsychology.moralFlexibility > 50) growthBeats.push('MC rationalizes a questionable choice');
+  if (bible.mcPsychology.addictionLevel > 60) growthBeats.push('MC struggles to log off / resist using powers');
+  if (bible.mcPsychology.controlNeed > 70) growthBeats.push('MC micro-manages a situation to maintain control');
+  growthBeats.push('MC reflects on how much has changed since the beginning');
+  const characterGrowthBeat = growthBeats.length > 0 ? pick(growthBeats, rng) : null;
+
+  // Relationship focus
+  const dynamics = bible.relationshipDynamics;
+  const relationshipFocus = dynamics.length > 0 ? pick(dynamics, rng).characterId : null;
+
+  // Lore reveal (every few chapters)
+  const loreReveal = chapterNumber > 2 && rng() > 0.65
+    ? pick(['progenitor_history', 'transfer_mechanics', 'game_origin', 'sealed_content', 'yuna_connection'], rng)
+    : null;
+
+  // Transfer event (rare but impactful)
+  const transferEvent = world === 'real' && rng() > 0.75
+    ? 'A new game attribute manifests in the real world'
+    : world === 'vr' && rng() > 0.85
+      ? 'A real-world experience influences game performance'
+      : null;
+
   return {
     chapterNumber,
     world,
@@ -577,6 +764,16 @@ export function generateBlueprint(
     foreshadowingToPayoff: toPayoff,
     secretsAtRisk,
     newElementsToIntroduce: newElements,
+
+    // Narrative intelligence
+    mcStage,
+    exploitDirective,
+    concealmentPressure,
+    closeCallScheduled,
+    characterGrowthBeat,
+    relationshipFocus,
+    loreReveal,
+    transferEvent,
   };
 }
 
@@ -741,6 +938,83 @@ export function updateSeriesBible(bible: SeriesBible, meta: ChapterMetadata): Se
 
   ps.recentSceneTypes = [...ps.recentSceneTypes.slice(-4), meta.primaryFocus];
   ps.suggestedNextTone = meta.tensionLevel > 60 ? 'light' : 'dark';
+
+  // ─── Update deep narrative systems ──────────────────────────────────────────
+
+  // MC Psychology evolution — gradual shifts based on chapter events
+  const psych = updated.mcPsychology;
+  psych.selfAwareness = Math.min(100, psych.selfAwareness + 2);
+  psych.addictionLevel = Math.min(100, psych.addictionLevel + 1);
+  if (meta.tensionLevel > 60) {
+    psych.controlNeed = Math.min(100, psych.controlNeed + 3);
+    psych.paranoia = Math.min(100, (updated.mcEmotionalState.paranoia || 0) + 2);
+  }
+  // Moral flexibility creeps up as MC uses more exploits
+  if (updated.exploits.filter(e => e.status === 'actively_used').length > 0) {
+    psych.moralFlexibility = Math.min(100, psych.moralFlexibility + 2);
+    psych.rationalizationTendency = Math.min(100, psych.rationalizationTendency + 1);
+  }
+
+  // Concealment state — heat rises slowly, close call counters tick
+  const cs = updated.concealmentState;
+  cs.vrConcealment.chaptersSinceCloseCall++;
+  cs.realConcealment.chaptersSinceCloseCall++;
+  // Heat naturally rises with more chapters (more to hide)
+  cs.heatLevel = Math.min(100, cs.heatLevel + 1);
+  // Real-world concealment gets harder as more transfers happen
+  if (updated.transferLog.length > 2) {
+    cs.realConcealment.risk = cs.heatLevel > 60 ? 'suspected' : cs.heatLevel > 30 ? 'noticed' : 'safe';
+  }
+
+  // Progression arc — check if stage should advance
+  const arc = updated.progressionArc;
+  const STAGE_ORDER: ProgressionStage[] = [
+    'naive_player', 'curious_tester', 'opportunist',
+    'paranoid_hider', 'strategic_abuser', 'seasoned_survivor',
+  ];
+  const currentIdx = STAGE_ORDER.indexOf(arc.currentStage);
+  // Advance stage based on chapter count and exploit usage as a simple heuristic
+  const shouldAdvance =
+    (arc.currentStage === 'naive_player' && ch >= 5) ||
+    (arc.currentStage === 'curious_tester' && ch >= 10 && arc.exploitUsageCount >= 1) ||
+    (arc.currentStage === 'opportunist' && ch >= 18 && arc.closeCallCount >= 2) ||
+    (arc.currentStage === 'paranoid_hider' && ch >= 28 && arc.exploitUsageCount >= 5) ||
+    (arc.currentStage === 'strategic_abuser' && ch >= 40 && arc.closeCallCount >= 5);
+
+  if (shouldAdvance && currentIdx < STAGE_ORDER.length - 1) {
+    const oldStage = arc.currentStage;
+    const newStage = STAGE_ORDER[currentIdx + 1];
+    // Close out old stage
+    const oldEntry = arc.stageHistory.find(s => s.stage === oldStage && s.exited === null);
+    if (oldEntry) oldEntry.exited = ch;
+    // Enter new stage
+    arc.currentStage = newStage;
+    arc.stageEnteredChapter = ch;
+    arc.stageHistory.push({ stage: newStage, entered: ch, exited: null, definingMoment: `Advanced in chapter ${ch}` });
+    // Sync psychology stage
+    psych.stage = newStage;
+    // Game perception evolves with stage
+    const perceptionMap: Record<ProgressionStage, MCPsychology['gamePerception']> = {
+      'naive_player': 'entertainment',
+      'curious_tester': 'tool',
+      'opportunist': 'tool',
+      'paranoid_hider': 'trap',
+      'strategic_abuser': 'weapon',
+      'seasoned_survivor': 'second_life',
+    };
+    psych.gamePerception = perceptionMap[newStage];
+  }
+
+  // Relationship dynamics — guilt increases when hiding more
+  for (const rel of updated.relationshipDynamics) {
+    const char = updated.characters.find(c => c.id === rel.characterId);
+    if (char && meta.characters.includes(char.id)) {
+      // If MC interacted with this character, guilt builds from the deception
+      if (rel.hidingFrom.length > 0) {
+        rel.guiltLevel = Math.min(100, rel.guiltLevel + 2);
+      }
+    }
+  }
 
   return updated;
 }
