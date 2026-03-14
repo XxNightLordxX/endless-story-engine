@@ -810,23 +810,24 @@ function generateChapterContent(
 function generateVRChapter(
   chapterNumber: number,
   level: number,
-  previousChapter: Chapter | null,
+  _previousChapter: Chapter | null,
   config: StoryConfig
 ): Chapter {
-  const titleWord = pick(VR_TITLES);
+  const rng = createRng(chapterNumber * 137);
+  const titleWord = `${pick(VR_TITLE_ADJ, rng)} ${pick(VR_TITLE_NOUN, rng)}`;
   const title = `Chapter ${chapterNumber}: ${titleWord}`;
-  const locations = pickN(VR_LOCATIONS, 2);
-  const npcs = pickN(VR_NPCS, 2);
-  const characters = ['Kael', ...npcs];
+  const locations = [makeLocation(rng), makeLocation(rng)];
+  const npcs = [makeNpc(rng), makeNpc(rng)];
+  const characters: string[] = ['Kael', ...npcs];
 
   // Pick system notifications based on level
-  const sysNotes = pickN(SYSTEM_NOTIFICATIONS, config.tension > 5 ? 3 : 2)
-    .map((fn) => fn(level));
+  const sysNotes = pickN(SYSTEM_TEMPLATES, config.tension > 5 ? 3 : 2, rng)
+    .map((fn) => fn(chapterNumber, level));
 
   // Build sections
-  const combatScene = pick(VR_COMBAT_SCENES)(npcs[0], locations[0]);
-  const explorationScene = pick(VR_EXPLORATION_SCENES)(npcs[1] || npcs[0], locations[1] || locations[0]);
-  const loreScene = config.tension > 4 ? pick(VR_LORE_SCENES)(locations[0]) : '';
+  const combatScene = pick(VR_COMBAT_SCENES, rng)(npcs[0], locations[0]);
+  const explorationScene = pick(VR_EXPLORATION_SCENES, rng)(npcs[1] || npcs[0], locations[1] || locations[0]);
+  const loreScene = config.tension > 4 ? pick(VR_LORE_SCENES, rng)(locations[0]) : '';
 
   // Build pacing intro
   const intros = [
@@ -845,7 +846,7 @@ function generateVRChapter(
   ];
 
   const content = [
-    pick(intros),
+    pick(intros, rng),
     '',
     sysNotes[0],
     '',
@@ -859,7 +860,7 @@ function generateVRChapter(
     '',
     sysNotes[2] || '',
     '',
-    pick(endings),
+    pick(endings, rng),
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -877,7 +878,7 @@ function generateVRChapter(
     content,
     wordCount: content.split(/\s+/).length,
     world: 'vr',
-    summary: pick(summaryOptions),
+    summary: pick(summaryOptions, rng),
     characters,
     locations,
     createdAt: new Date().toISOString(),
@@ -890,15 +891,16 @@ function generateRealChapter(
   previousChapter: Chapter | null,
   _config: StoryConfig
 ): Chapter {
-  const titleWord = pick(REAL_TITLES);
+  const rng = createRng(chapterNumber * 251);
+  const titleWord = pick(REAL_TITLES, rng);
   const title = `Chapter ${chapterNumber}: ${titleWord}`;
-  const locations = pickN(REAL_LOCATIONS, 2);
-  const hasAlex = Math.random() > 0.4;
-  const characters = ['Kael', 'Yuna', ...(hasAlex ? ['Alex'] : [])];
+  const locations: string[] = pickN(REAL_LOCATIONS, 2, rng);
+  const hasAlex = rng() > 0.4;
+  const characters: string[] = ['Kael', 'Yuna', ...(hasAlex ? ['Alex'] : [])];
 
-  const hospitalScene = pick(REAL_HOSPITAL_SCENES)();
-  const realityBleed = pick(REAL_REALITY_BLEED)();
-  const alexScene = hasAlex ? pick(REAL_ALEX_SCENES)() : '';
+  const hospitalScene = pick(REAL_HOSPITAL_SCENES, rng)();
+  const realityBleed = pick(REAL_REALITY_BLEED, rng)();
+  const alexScene = hasAlex ? pick(REAL_ALEX_SCENES, rng)() : '';
 
   const intros = [
     `The real world felt thin. That was the only way Kael could describe it—thin, like paper stretched too far, like reality was a photograph that had been exposed to too much light. Colors washed out. Sounds muted. Everything except the hunger, which was vivid and sharp and growing.`,
@@ -917,7 +919,7 @@ function generateRealChapter(
   ];
 
   const content = [
-    pick(intros),
+    pick(intros, rng),
     '',
     hospitalScene,
     '',
@@ -925,7 +927,7 @@ function generateRealChapter(
     '',
     realityBleed,
     '',
-    pick(endings),
+    pick(endings, rng),
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -943,7 +945,7 @@ function generateRealChapter(
     content,
     wordCount: content.split(/\s+/).length,
     world: 'real',
-    summary: pick(summaryOptions),
+    summary: pick(summaryOptions, rng),
     characters,
     locations,
     createdAt: new Date().toISOString(),
